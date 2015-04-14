@@ -1,8 +1,7 @@
 package exec;
 
 import command.*;
-import msg.ClientMsg;
-import msg.Message;
+import msg.*;
 import util.PlayList;
 import util.ReplicaID;
 import util.Write;
@@ -49,8 +48,11 @@ public class Server extends NetNode {
       Message msg = receive();
       if (msg instanceof ClientMsg) {
         ClientMsg rqst = (ClientMsg) msg;
-        originalWriteCmd(rqst);
+        originalClientCmd(rqst);
+      } else if (msg instanceof CreateMsg) {
+
       }
+
     }
   }
 
@@ -72,11 +74,21 @@ public class Server extends NetNode {
   }
 
   /**
+   *  initiate anti-entropy process with every connected node
+   *
+   */
+  public void doGossip() {
+    for (int node : connected) {
+      send(new AERqstMsg(pid, node));
+    }
+  }
+
+  /**
    * Get write from client for the first time,
    * no need to roll-back as I am the first one to have this Write
    *
    */
-  public void originalWriteCmd (ClientMsg rqst) {
+  public void originalClientCmd (ClientMsg rqst) {
     int acceptTime = nextTimeStamp();
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
     Write entry = new Write(csn, acceptTime, rid, rqst.cmd);
@@ -86,8 +98,36 @@ public class Server extends NetNode {
 
     // send ack to client
 
+
     // update with neighbors
+    doGossip();
   }
+
+
+  /**
+   * Get Create from server for the first time,
+   * no need to roll-back as I am the first one to have this Write
+   *
+   */
+  public void originalCreateCmd (CreateMsg msg) {
+    int acceptTime = nextTimeStamp();
+    ReplicaID newId = new ReplicaID(acceptTime, rid, msg.src);
+    int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
+    Write entry = new Write(csn, acceptTime, rid, msg.cmd);
+    writeLog.add(entry);
+
+    versionVector.put(rid.toString(), currTimeStamp());
+    versionVector.put(newId.toString(), 0);
+
+    // send ack to server
+    CreateReplyMsg crMsg = new CreateReplyMsg(pid, msg.src, newId);
+    send(crMsg);
+
+    // update with neighbors, anti-entropy
+  }
+
+
+
 
 
   /**
