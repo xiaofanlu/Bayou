@@ -33,24 +33,24 @@ public class PlayList {
     }
   }
 
+  public String get(String song) {
+    if (pl.containsKey(song)) {
+      return pl.get(song);
+    } else {
+      return "NOT_FOUND";
+    }
+  }
+
   public boolean update (ClientCmd cmd) {
     if (cmd instanceof Put) {
       return add(cmd.song, cmd.url);
     } else if (cmd instanceof Del) {
       return delete(cmd.song);
     } else {
-      return true;
+      return pl.containsKey(cmd.song);
     }
   }
 
-  public String getUrl(String song) {
-    if(pl.containsKey(song)) {
-      return pl.get(song);
-    } else {
-      return "Do not exits!";
-    }
-  }
-  
   public void print() {
     System.out.println();
     System.out.println("++++++++++++++PlayList++++++++++++");

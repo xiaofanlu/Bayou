@@ -1,48 +1,99 @@
 package exec;
 
-import command.Command;
-import command.Del;
-import command.Put;
-import msg.ClientRequest;
-import msg.Message;
-import msg.RequestReply;
+import command.*;
+import msg.*;
+import util.SessionManager;
 
 /**
- * Created by xiaofan on 3/28/15.
+ * Client code
+ *  1. send request to server, controlled by Master
+ *  2. Receive server's reply, update session manager
+ *
  */
 
 public class Client extends NetNode {
   int serverId;
+  SessionManager sm;
 
-  public Client (int pid, int sid, int numServers, int numClients) {
+  public Client (int pid, int sid) {
     super(pid);
     serverId = sid;
+    sm = new SessionManager();
+    start();
   }
 
+  public String name () {
+    return "Client";
+  }
+
+  /**
+   * Handle received message
+   */
   public void run() {
+    if (debug) {
+      print("Started");
+    }
     while (true){
       Message msg = receive();
-      if (msg instanceof RequestReply) {
-        RequestReply rqstRply = (RequestReply) msg;
-        if (rqstRply.command instanceof Put) {
-
+      if (msg instanceof ClientReplyMsg) {
+        ClientReplyMsg rqstRply = (ClientReplyMsg) msg;
+        if (rqstRply.cmd instanceof Put) {
+          if (rqstRply.suc) {
+            sm.updateWrite(rqstRply.write);
+          } else {
+            // todo
+            System.out.print("Put failed, to be updated");
+          }
         }
-        if (rqstRply.command instanceof Del) {
-
+        if (rqstRply.cmd instanceof Del) {
+          if (rqstRply.suc) {
+            sm.updateWrite(rqstRply.write);
+          } else {
+            // todo
+            System.out.print("Del failed, to be updated");
+          }
+        }
+        if (rqstRply.cmd instanceof Get) {
+          if (rqstRply.suc) {
+            sm.updateRead(rqstRply.write);
+            System.out.print("Get: " + rqstRply.url);
+          } else {
+            // todo
+            System.out.print("Get failed, to be updated");
+          }
         }
       }
     }
   }
 
+  /**
+   * Put command, Write
+   * @param name key
+   * @param url  value
+   */
   public void put (String name, String url) {
-    Command cmd = new Put(name, url);
-    ClientRequest rqst = new ClientRequest(pid, serverId, cmd);
+    ClientCmd cmd = new Put(name, url);
+    ClientMsg rqst = new ClientMsg(pid, serverId, cmd, sm);
     send(rqst);
   }
 
+  /**
+   * Delete command, Write
+   * @param name key
+   */
   public void del (String name) {
-    Command cmd = new Del(name);
-    ClientRequest rqst = new ClientRequest(pid, serverId, cmd);
+    ClientCmd cmd = new Del(name);
+    ClientMsg rqst = new ClientMsg (pid, serverId, cmd, sm);
+    send(rqst);
+  }
+
+  /**
+   * Get command, Read
+   * @param name key
+   */
+  public void get (String name) {
+    ClientCmd cmd = new Get(name);
+    ClientMsg rqst = new ClientMsg (pid, serverId, cmd, sm);
     send(rqst);
   }
 }

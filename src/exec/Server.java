@@ -21,7 +21,7 @@ public class Server extends NetNode {
   int maxCSN;
 
   ReplicaID rid;
-  Set<Integer> connected;
+  ArrayList<Integer> connected;
   PlayList playList;
   WriteLog writeLog;
 
@@ -29,80 +29,35 @@ public class Server extends NetNode {
 
   public Server(int id) {
     super(id);
+    rid = new ReplicaID(id);
     primaryId = 0;
+    initialization();
+    start();
+  }
+
+  public Server(int id, int primary) {
+    super(id);
+    primaryId = primary;
+    initialization();
+    send(new CreateMsg(pid, primaryId));
+    start();
+  }
+
+  public void initialization() {
     timeStamp = 0;
     csnStamp = 0;
     maxCSN = 0;
 
-    connected = new HashSet<Integer>();
+    connected = new ArrayList<Integer>();
     writeLog = new WriteLog();
     playList = new PlayList();
 
     versionVector = new HashMap<String, Integer>();
-
-
   }
 
-  public void run() {
-    while (true){
-      Message msg = receive();
-      /* request from client */
-      if (msg instanceof ClientMsg) {
-        ClientMsg rqst = (ClientMsg) msg;
-        originalClientCmd(rqst);
-      }
 
-      /* create write from other connected server */
-      else if (msg instanceof CreateMsg) {
-        CreateMsg create = (CreateMsg) msg;
-        originalCreateCmd(create);
-      } else if (msg instanceof CreateReplyMsg) {
-        CreateReplyMsg cReply = (CreateReplyMsg) msg;
-        setUpServer(cReply);
-      }
-
-      /* anti-entropy messages */
-      else if (msg instanceof AERqstMsg) {
-        send(new AERplyMsg(pid, msg.dst, versionVector, maxCSN));
-      } else if (msg instanceof AERplyMsg) {
-        AERplyMsg m = (AERplyMsg) msg;
-        anti_entropy(m);
-      } else if (msg instanceof AEAckMsg) {
-        AEAckMsg ackMsg = (AEAckMsg) msg;
-        ackHandler(ackMsg);
-      }
-
-    }
-  }
-
-  /**
-   * handler for write updates through anti-entropy process
-   * @param ackMsg
-   */
-  public void ackHandler(AEAckMsg ackMsg) {
-    if (ackMsg.commit) {
-      /* I have the write, just need to commit it
-       * rollback may be needed ...
-       */
-      if (writeLog.commit(ackMsg.write)) {
-        /* successfully updated */
-        maxCSN = Math.max(maxCSN, ackMsg.write.csn);
-        refreshPlayList();
-        doGossip();
-      }
-    } else {
-      // todo
-    }
-  }
-
-  /**
-   * Initialization upon receiving reply from create write
-   * @param cReply
-   */
-  public void setUpServer(CreateReplyMsg cReply) {
-    rid = cReply.rid;
-    timeStamp = rid.acceptTime + 1;
-    versionVector.put(rid.toString(), currTimeStamp());
+  public String name () {
+    return "Server";
   }
 
   public boolean isPrimary() {
@@ -123,6 +78,55 @@ public class Server extends NetNode {
   }
 
   /**
+   * Main Server Thread, message handler
+   */
+  public void run() {
+    if (debug) {
+      print("Started");
+    }
+    while (true){
+      Message msg = receive();
+      /* request from client */
+      if (msg instanceof ClientMsg) {
+        ClientMsg rqst = (ClientMsg) msg;
+        originalClientCmd(rqst);
+      }
+
+      /* create write from other connected server */
+      else if (msg instanceof CreateMsg) {
+        CreateMsg create = (CreateMsg) msg;
+        originalCreateCmd(create);
+      } else if (msg instanceof CreateReplyMsg) {
+        CreateReplyMsg cReply = (CreateReplyMsg) msg;
+        setUpServer(cReply);
+      }
+
+      /* anti-entropy messages */
+      else if (msg instanceof AERqstMsg) {
+        send(new AERplyMsg(pid, msg.src, versionVector, maxCSN));
+      } else if (msg instanceof AERplyMsg) {
+        AERplyMsg m = (AERplyMsg) msg;
+        anti_entropy(m);
+      } else if (msg instanceof AEAckMsg) {
+        AEAckMsg ackMsg = (AEAckMsg) msg;
+        antiEntropyACKHandler(ackMsg);
+      }
+    }
+  }
+
+
+  /**
+   * Initialization upon receiving reply from create write
+   * @param cReply
+   */
+  public void setUpServer(CreateReplyMsg cReply) {
+    rid = cReply.rid;
+    timeStamp = rid.acceptTime + 1;
+    versionVector.put(rid.toString(), currTimeStamp());
+  }
+
+
+  /**
    *  initiate anti-entropy process with every connected node
    *
    */
@@ -135,21 +139,40 @@ public class Server extends NetNode {
   /**
    * Get write from client for the first time,
    * no need to roll-back as I am the first one to have this Write
-   *
+   * 1. check domination
+   * -- if write
+   *   2. generate Write entry
+   *   3. update writeLog
+   *   4. update DB
+   *   5. update versionVector
+   *   6. send ack to client
+   *   7. doGossip()
+   * -- if read
+   *   relevant read?
    */
   public void originalClientCmd (ClientMsg rqst) {
-    int acceptTime = nextTimeStamp();
-    int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
-    Write entry = new Write(csn, acceptTime, rid, rqst.cmd);
-    writeLog.add(entry);
-    boolean suc = playList.update(rqst.cmd);
-    versionVector.put(rid.toString(), currTimeStamp());
-
-    // send ack to client
-
-
-    // update with neighbors
-    doGossip();
+    if (!rqst.sm.isDominatedBy(versionVector)) {
+      send(new ClientReplyMsg(rqst));
+      return;
+    }
+    if (rqst.isWrite()) {
+      if (playList.update(rqst.cmd)) {
+        int acceptTime = nextTimeStamp();
+        int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
+        Write write = new Write(csn, acceptTime, rid, rqst.cmd);
+        writeLog.add(write);
+        versionVector.put(rid.toString(), currTimeStamp());
+        send(new ClientReplyMsg(rqst, write));
+        doGossip();
+      } else {
+        send(new ClientReplyMsg(rqst));
+      }
+    } else if (rqst.isRead()) {
+      String song = rqst.cmd.song;
+      String url = playList.get(song);
+      Write w = writeLog.lastRelevantWrite(song);
+      send(new ClientReplyMsg(rqst, url, w));
+    }
   }
 
 
@@ -162,16 +185,15 @@ public class Server extends NetNode {
     int acceptTime = nextTimeStamp();
     ReplicaID newId = new ReplicaID(acceptTime, rid, msg.src);
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
-    Write entry = new Write(csn, acceptTime, rid, msg.cmd);
+    Create create = new Create(rid, acceptTime);
+    Write entry = new Write(csn, acceptTime, rid, create);
     writeLog.add(entry);
 
     versionVector.put(rid.toString(), currTimeStamp());
     versionVector.put(newId.toString(), 0);
 
     // send ack to server
-    CreateReplyMsg crMsg = new CreateReplyMsg(pid, msg.src, newId);
-    send(crMsg);
-
+    send(new CreateReplyMsg(pid, msg.src, newId));
     // update with neighbors, anti-entropy
     doGossip();
   }
@@ -179,38 +201,80 @@ public class Server extends NetNode {
 
   /**
    * Propagating committed writes upon receiving reply from R
-   *
+   * Complex logic, can be buggy
    */
   public void anti_entropy(AERplyMsg msg) {
-    List<Write> unknownWrites = new ArrayList<Write> ();
     Iterator<Write> it = writeLog.getIterator();
     while (it.hasNext()) {
       Write w = it.next();
-      String wKey = w.replicaId.toString();
+      String rjID = w.replicaId.toString();         // R_j, owner of the write
+      String rkID = w.replicaId.parent.toString();  // R_k
       if (w.csn <= msg.CNS) {
         /* already committed in R */
         continue;
-      }  else if (w.csn < Integer.MAX_VALUE) {
+      }  else if (w.csn < Integer.MAX_VALUE) {   // > msg.CNS
         /*  committed write unknown to R */
-        if (msg.versionVector.containsKey(wKey) &&
-            w.acceptTime <= msg.versionVector.get(wKey)) {
+        if (msg.hasKey(rjID)) {
+          if ( w.acceptTime <= msg.getTime(rjID)) {
             /* R has the write, but doesn't know it is committed  */
             send(new AEAckMsg(pid, msg.src, w, true));
-        } else {
+          } else {
+            /* R don't have the write, add committed write  */
             send(new AEAckMsg(pid, msg.src, w));
+          }
+        } else {
+          /*  the Missing VV entry, don't know of rjID ...  */
+          int riVrk = msg.hasKey(rkID) ? msg.getTime(rkID) : -1;
+          int TSkj = w.replicaId.acceptTime;
+          if (riVrk < TSkj) {
+            send(new AEAckMsg(pid, msg.src, w));
+          }
         }
       } else {
         /* all tentative writes */
-        int rvTime = msg.versionVector.containsKey(wKey) ?
-                      msg.versionVector.get(wKey) : -1;
-        if (rvTime < w.acceptTime) {
-          send(new AEAckMsg(pid, msg.src, w));
+        if (msg.hasKey(rjID)) {
+          if (msg.getTime(rjID) < w.acceptTime) {
+            send(new AEAckMsg(pid, msg.src, w));
+          }
+        } else {
+          /*  the Missing VV entry, don't know of rjID ...  */
+          int riVrk = msg.hasKey(rkID) ? msg.getTime(rkID) : -1;
+          int TSkj = w.replicaId.acceptTime;
+          if (riVrk < TSkj) {
+            send(new AEAckMsg(pid, msg.src, w));
+          }
         }
       }
     }
   }
 
 
+  /**
+   * handler for write updates through anti-entropy process
+   * @param ackMsg
+   */
+  public void antiEntropyACKHandler(AEAckMsg ackMsg) {
+    if (ackMsg.commit) {
+      /* I have the write, just need to commit it
+       * rollback may be needed ...
+       */
+      if (writeLog.commit(ackMsg.write)) {
+        /* successfully updated */
+        maxCSN = Math.max(maxCSN, ackMsg.write.csn);
+        refreshPlayList();
+        doGossip();
+      }
+    } else {
+      Write w = ackMsg.write;
+      if (isPrimary() && ackMsg.write.csn == Integer.MAX_VALUE) {
+        w.csn = getCSN();
+      }
+      writeLog.add(w);
+      refreshPlayList();
+      versionVector.put(rid.toString(), currTimeStamp());
+      doGossip();
+    }
+  }
 
 
   /**
@@ -251,5 +315,23 @@ public class Server extends NetNode {
       }
     }
     playList.pl = tmp;
+  }
+
+  public void connectTo(List<Integer> upList) {
+    for (int i : upList) {
+      connected.add(i);
+    }
+  }
+
+  public void updateConnected(ArrayList<Integer> serverList) {
+    connected = new ArrayList<Integer>(serverList);
+    if (connected.contains(pid)) {
+      connected.remove((Integer) pid);
+    }
+    print(connected.toString());
+  }
+
+  public void printLog() {
+    writeLog.print();
   }
 }

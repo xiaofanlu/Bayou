@@ -19,7 +19,7 @@ import java.util.List;
 
 
 public class NetNode extends Thread {
-  public boolean debug = false;
+  public boolean debug = Constants.debug;
   public boolean shutdown = false;
 
   public int pid;
@@ -39,11 +39,14 @@ public class NetNode extends Thread {
   }
 
   /**
-   * Send message to Network simulator
+   * Send message
    *
    * @param msg
    */
   public void send(Message msg) {
+    if (debug) {
+      System.out.println(msg);
+    }
     nc.sendMsg(msg.dst, serialize(msg));
   }
 
@@ -57,6 +60,13 @@ public class NetNode extends Thread {
   }
 
 
+  public void print(String msg) {
+    System.out.println(name() + " " + pid + ": " + msg);
+  }
+
+  public String name() {
+    return "Node";
+  }
 
   /**
    * Translate the Message to a string to transmit through socket

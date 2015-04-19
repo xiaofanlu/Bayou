@@ -2,10 +2,14 @@ package util;
 
 import command.Command;
 
+import java.io.Serializable;
+
 /**
- * Created by xiaofan on 4/13/15.
+ * Write: log entry
  */
-public class Write implements Comparable<Write> {
+public class Write implements Comparable<Write>, Serializable {
+  public static final long serialVersionUID = 4241231L;
+
   public int csn;
   public int acceptTime;
   public ReplicaID replicaId;
@@ -34,5 +38,17 @@ public class Write implements Comparable<Write> {
   public boolean sameAs(Write other) {
     return replicaId.toString().equals(other.replicaId.toString()) &&
         acceptTime == other.acceptTime;
+  }
+
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("W(");
+    sb.append(csn);
+    sb.append(", ");
+    sb.append(acceptTime);
+    sb.append(", ");
+    sb.append(replicaId.toString());
+    sb.append(") ");
+    return sb.toString();
   }
 }

@@ -16,7 +16,16 @@ public class AERplyMsg extends Message {
     CNS = cns;
   }
 
+  public boolean hasKey(String rid) {
+    return versionVector.containsKey(rid);
+  }
+
+  public int getTime(String rid) {
+    assert versionVector.containsKey(rid);
+    return versionVector.get(rid);
+  }
+
   public String toString() {
-    return super.toString() + "Anti_entropy_reply()";
+    return super.toString() + "Anti_entropy_reply(" + CNS + ")";
   }
 }
