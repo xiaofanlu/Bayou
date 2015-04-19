@@ -3,7 +3,7 @@ package msg;
 import java.io.Serializable;
 
 /**
- * Created by xiaofan on 4/13/15.
+ * Super Message class
  */
 public class Message implements Serializable {
   public int src;
@@ -17,6 +17,17 @@ public class Message implements Serializable {
   public String toString() {
     return src + " -> " + dst + ": ";
   }
+
+  public boolean isAEmsg () {
+    return false;
+  }
+  /*
+  public boolean isAEmsg () {
+    return this instanceof AEAckMsg  ||
+           this instanceof AERplyMsg ||
+           this instanceof AERqstMsg;
+  }
+  */
 
 }
 

@@ -1,0 +1,10 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="Bayou:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Bayou_jar</output-path>
+    <root id="archive" name="Bayou.jar">
+      <element id="module-output" name="Bayou" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/../commons-codec-1.4.jar" path-in-jar="/" />
+      <element id="dir-copy" path="$PROJECT_DIR$/src" />
+    </root>
+  </artifact>
+</component>

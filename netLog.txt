@@ -1,0 +1,20 @@
+Apr 19, 2015 4:16:00 PM framework.ListenServer <init>
+INFO: Server 0: Server connection established
+Apr 19, 2015 4:16:00 PM framework.ListenServer <init>
+INFO: Server 1: Server connection established
+Apr 19, 2015 4:16:00 PM framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 0 established
+Apr 19, 2015 4:16:00 PM framework.NetController initOutgoingConn
+INFO: Server 0: Socket to 1 established
+Apr 19, 2015 4:16:01 PM framework.ListenServer <init>
+INFO: Server 2: Server connection established
+Apr 19, 2015 4:16:01 PM framework.ListenServer <init>
+INFO: Server 3: Server connection established
+Apr 19, 2015 4:16:01 PM framework.NetController initOutgoingConn
+INFO: Server 2: Socket to 0 established
+Apr 19, 2015 4:16:01 PM framework.NetController initOutgoingConn
+INFO: Server 3: Socket to 1 established
+Apr 19, 2015 4:16:01 PM framework.NetController initOutgoingConn
+INFO: Server 0: Socket to 2 established
+Apr 19, 2015 4:16:01 PM framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 3 established

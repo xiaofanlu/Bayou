@@ -40,8 +40,7 @@ public class Master {
           Server s = (Server)nodes[i];
           s.updateConnected(curServers);
         }
-
-
+        takeSnap(Constants.SLEEP);
 
       } else if (inputLine[0].equals("retireServer")) {
         serverId = Integer.parseInt(inputLine[1]);
@@ -65,7 +64,20 @@ public class Master {
           * Break the connection between a client and a server or between
 	        * two servers
           */
+        assert nodes[id1] != null;
+        assert nodes[id2] != null;
+        if (nodes[id1] instanceof Server && nodes[id2] instanceof Server) {
+          Server s1 = (Server)nodes[id1];
+          s1.disconnectWith(id2);
+          Server s2 = (Server)nodes[id2];
+          s2.disconnectWith(id1);
+        } else if (nodes[id1] instanceof Client) {
 
+        } else if (nodes[id2] instanceof Client) {
+
+        } else {
+
+        }
       } else if (inputLine[0].equals("restoreConnection")) {
         id1 = Integer.parseInt(inputLine[1]);
         id2 = Integer.parseInt(inputLine[2]);
@@ -73,6 +85,20 @@ public class Master {
           * Restore the connection between a client and a server or between
 	        * two servers
           */
+        assert nodes[id1] != null;
+        assert nodes[id2] != null;
+        if (nodes[id1] instanceof Server && nodes[id2] instanceof Server) {
+          Server s1 = (Server)nodes[id1];
+          s1.connectTo(id2);
+          Server s2 = (Server)nodes[id2];
+          s2.connectTo(id1);
+        } else if (nodes[id1] instanceof Client) {
+
+        } else if (nodes[id2] instanceof Client) {
+
+        } else {
+
+        }
 
       } else if (inputLine[0].equals("pause")) {
          /**
@@ -93,6 +119,7 @@ public class Master {
            * time that this function blocks for should increase linearly with the
 	         * number of servers in the system.
 	         */
+        takeSnap(curServers.size() * Constants.SLEEP);
 
       } else if (inputLine[0].equals("printLog")) {
         serverId = Integer.parseInt(inputLine[1]);
@@ -118,6 +145,7 @@ public class Master {
         assert nodes[clientId] instanceof Client;
         Client c = (Client)nodes[clientId];
         c.put(songName, URL);
+       // takeSnap(Constants.SLEEP);
       } else if (inputLine[0].equals("get")) {
         clientId = Integer.parseInt(inputLine[1]);
         songName = inputLine[2];
@@ -131,7 +159,7 @@ public class Master {
         assert nodes[clientId] instanceof Client;
         Client c = (Client)nodes[clientId];
         c.get(songName);
-
+        takeSnap(Constants.SLEEP);
       } else if (inputLine[0].equals("delete")) {
         clientId = Integer.parseInt(inputLine[1]);
         songName = inputLine[2];
@@ -143,7 +171,19 @@ public class Master {
         assert nodes[clientId] instanceof Client;
         Client c = (Client)nodes[clientId];
         c.del(songName);
+        //takeSnap(Constants.SLEEP);
       }
+    }
+    // all done
+    takeSnap(500);
+    System.exit(0);
+  }
+
+  public static void takeSnap(int time) {
+    try {
+      Thread.sleep(time);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
     }
   }
 }

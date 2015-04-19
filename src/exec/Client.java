@@ -56,10 +56,9 @@ public class Client extends NetNode {
         if (rqstRply.cmd instanceof Get) {
           if (rqstRply.suc) {
             sm.updateRead(rqstRply.write);
-            System.out.print("Get: " + rqstRply.url);
+            System.out.println(rqstRply.cmd.song + ":" + rqstRply.url);
           } else {
-            // todo
-            System.out.print("Get failed, to be updated");
+            System.out.println(rqstRply.cmd.song + ":ERR_DEP");
           }
         }
       }

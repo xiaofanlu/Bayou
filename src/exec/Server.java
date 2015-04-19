@@ -39,8 +39,8 @@ public class Server extends NetNode {
     super(id);
     primaryId = primary;
     initialization();
-    send(new CreateMsg(pid, primaryId));
     start();
+    send(new CreateMsg(pid, primaryId));
   }
 
   public void initialization() {
@@ -128,7 +128,6 @@ public class Server extends NetNode {
 
   /**
    *  initiate anti-entropy process with every connected node
-   *
    */
   public void doGossip() {
     for (int node : connected) {
@@ -136,6 +135,17 @@ public class Server extends NetNode {
     }
   }
 
+  /**
+   *  initiate anti-entropy process with every connected node
+   *  Get the message from src, no need to send it back again
+   */
+  public void doGossip(int src) {
+    for (int node : connected) {
+      if (node != src) {
+        send(new AERqstMsg(pid, node));
+      }
+    }
+  }
   /**
    * Get write from client for the first time,
    * no need to roll-back as I am the first one to have this Write
@@ -265,14 +275,25 @@ public class Server extends NetNode {
         doGossip();
       }
     } else {
+      boolean newCommitted = false;
       Write w = ackMsg.write;
       if (isPrimary() && ackMsg.write.csn == Integer.MAX_VALUE) {
         w.csn = getCSN();
+        newCommitted = true;
       }
       writeLog.add(w);
       refreshPlayList();
       versionVector.put(rid.toString(), currTimeStamp());
-      doGossip();
+      // update maxCSN;
+      if (!isPrimary() && w.csn != Integer.MAX_VALUE) {
+        maxCSN = Math.max(maxCSN, w.csn);
+      }
+
+      if (newCommitted) {
+        doGossip();
+      } else {
+        doGossip(ackMsg.src);
+      }
     }
   }
 
@@ -317,9 +338,28 @@ public class Server extends NetNode {
     playList.pl = tmp;
   }
 
-  public void connectTo(List<Integer> upList) {
-    for (int i : upList) {
-      connected.add(i);
+
+  public void connectTo(int id) {
+   if (!connected.contains(id)) {
+     connected.add(id);
+     send(new AERqstMsg(pid, id));
+     if (debug) {
+       print("Reconnected with " + id);
+       print(connected.toString());
+     }
+   }
+  }
+
+  public void disconnectWith(int id) {
+    if (connected.contains(id)) {
+      connected.remove((Integer)id);
+      if (debug) {
+        print("Disconnected with " + id);
+        print(connected.toString());
+      }
+    } else {
+      print("Disconnected with " + id + " no connection found...");
+      print(connected.toString());
     }
   }
 
@@ -328,7 +368,10 @@ public class Server extends NetNode {
     if (connected.contains(pid)) {
       connected.remove((Integer) pid);
     }
-    print(connected.toString());
+    if (debug) {
+      print("New Server joined: ");
+      print(connected.toString());
+    }
   }
 
   public void printLog() {

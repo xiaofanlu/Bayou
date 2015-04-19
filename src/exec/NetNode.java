@@ -22,6 +22,8 @@ public class NetNode extends Thread {
   public boolean debug = Constants.debug;
   public boolean shutdown = false;
 
+  private volatile boolean pause = false;
+
   public int pid;
   MsgQueue inbox;
 
@@ -38,6 +40,17 @@ public class NetNode extends Thread {
     new Listener().start();
   }
 
+  public void pause() {
+    pause = true;
+  }
+
+  /**
+   * can't use start() as it is reserved for Thread start()
+   */
+  public void noPause() {
+    pause = false;
+  }
+
   /**
    * Send message
    *
@@ -45,12 +58,18 @@ public class NetNode extends Thread {
    */
   public void send(Message msg) {
     if (debug) {
-      System.out.println(msg);
+      print("Sent: " + msg.toString());
+    }
+    if (pause && msg.isAEmsg()) {
+      return;
     }
     nc.sendMsg(msg.dst, serialize(msg));
   }
 
   public void deliver(Message msg) {
+    if (pause && msg.isAEmsg()) {
+      return;
+    }
     inbox.offer(msg);
   }
 

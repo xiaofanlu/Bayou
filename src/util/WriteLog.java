@@ -81,7 +81,7 @@ public class WriteLog {
         System.out.print("UNKNOWN:(");
       }
       System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?
-                                                  "TRUE" : "FALSE"));
+                                                  "FALSE" : "TRUE"));
     }
   }
 
