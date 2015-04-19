@@ -4,16 +4,16 @@ import command.ClientCmd;
 import command.Del;
 import command.Get;
 import command.Put;
-import util.SessionManager;
+import util.SessionManagerf;
 
 /**
  * Client Request Message
  */
 public class ClientMsg extends Message {
   public ClientCmd cmd;
-  public SessionManager sm;
+  public SessionManagerf sm;
 
-  public ClientMsg(int src, int dst, ClientCmd cmd, SessionManager sm) {
+  public ClientMsg(int src, int dst, ClientCmd cmd, SessionManagerf sm) {
     super(src, dst);
     this.cmd = cmd;
     this.sm = sm;

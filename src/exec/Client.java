@@ -2,7 +2,7 @@ package exec;
 
 import command.*;
 import msg.*;
-import util.SessionManager;
+import util.SessionManagerf;
 
 /**
  * Client code
@@ -13,12 +13,12 @@ import util.SessionManager;
 
 public class Client extends NetNode {
   int serverId;
-  SessionManager sm;
+  SessionManagerf sm;
 
   public Client (int pid, int sid) {
     super(pid);
     serverId = sid;
-    sm = new SessionManager();
+    sm = new SessionManagerf();
     start();
   }
 
