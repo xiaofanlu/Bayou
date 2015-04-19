@@ -10,7 +10,7 @@ import java.util.Map;
  *
  *
  */
-public class SessionManagerf implements Serializable {
+public class SessionManager implements Serializable {
   public static final long serialVersionUID = 4241239L;
 
   public Map<String, Integer> readVector = new HashMap<String, Integer> ();
