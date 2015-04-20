@@ -8,51 +8,51 @@ import util.Write;
 import util.WriteLog;
 
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Server/Replica class
  */
 public class Server extends NetNode {
-  int primaryId;
+  int timeStamp = 0;
+  int csnStamp = 0;
+  boolean isPrimary = false;
 
-  int timeStamp;
-  int csnStamp;
+  int maxCSN = 0;
 
-  int maxCSN;
 
-  ReplicaID rid;
-  ArrayList<Integer> connected;
-  PlayList playList;
-  WriteLog writeLog;
+  ReplicaID rid = null;
+  ArrayList<Integer> connected = new ArrayList<Integer>();
+  PlayList playList = new PlayList();
+  WriteLog writeLog = new WriteLog();
 
-  Map<String, Integer> versionVector;
+  Map<String, Integer> versionVector = new HashMap<String, Integer>();
 
+
+  boolean toRetire = false;
+  boolean retired = false;
+  public Lock retireLock = new ReentrantLock();
+  /**
+   * Primary server, start with id = 0
+   * @param id
+   */
   public Server(int id) {
     super(id);
     rid = new ReplicaID(id);
-    primaryId = 0;
-    initialization();
+    isPrimary = true;
     start();
   }
 
+  /**
+   * Non-primary server, no need to remember the primary ID.
+   * @param id
+   * @param primary
+   */
   public Server(int id, int primary) {
     super(id);
-    primaryId = primary;
-    initialization();
     start();
-    send(new CreateMsg(pid, primaryId));
-  }
-
-  public void initialization() {
-    timeStamp = 0;
-    csnStamp = 0;
-    maxCSN = 0;
-
-    connected = new ArrayList<Integer>();
-    writeLog = new WriteLog();
-    playList = new PlayList();
-
-    versionVector = new HashMap<String, Integer>();
+    send(new CreateMsg(pid, primary));
   }
 
 
@@ -61,7 +61,7 @@ public class Server extends NetNode {
   }
 
   public boolean isPrimary() {
-    return pid == primaryId;
+    return isPrimary;
   }
 
   public int nextTimeStamp () {
@@ -84,8 +84,9 @@ public class Server extends NetNode {
     if (debug) {
       print("Started");
     }
-    while (true){
+    while (!retired){
       Message msg = receive();
+
       /* request from client */
       if (msg instanceof ClientMsg) {
         ClientMsg rqst = (ClientMsg) msg;
@@ -107,9 +108,19 @@ public class Server extends NetNode {
       } else if (msg instanceof AERplyMsg) {
         AERplyMsg m = (AERplyMsg) msg;
         anti_entropy(m);
+        if (toRetire) {
+          retire(msg.src);
+        }
       } else if (msg instanceof AEAckMsg) {
         AEAckMsg ackMsg = (AEAckMsg) msg;
         antiEntropyACKHandler(ackMsg);
+      }
+
+      /* primary handoff Message */
+      else if (msg instanceof PrimaryHandOffMsg) {
+        PrimaryHandOffMsg pho = (PrimaryHandOffMsg) msg;
+        isPrimary = true;
+        csnStamp = pho.curCSN;
       }
     }
   }
@@ -376,5 +387,50 @@ public class Server extends NetNode {
 
   public void printLog() {
     writeLog.print();
+  }
+
+
+  /**
+   * Receive retire command from master
+   * Issue retire write to itself
+   * must be called by Master thread for blocking.
+   */
+  public void toRetire() {
+    int acceptTime = nextTimeStamp();
+    int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
+    Retire rcmd = new Retire(rid, acceptTime);
+    Write entry = new Write(csn, acceptTime, rid, rcmd);
+    writeLog.add(entry);
+    versionVector.put(rid.toString(), currTimeStamp());
+
+    /* assume has at least one neighbor right now (piazza @86)
+     * otherwise need keep gossiping periodically.
+     */
+    assert connected.size() != 0;
+    doGossip();
+    toRetire = true;
+    while (!retired) {
+      try {
+        wait();
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  /**
+   * Finishing the retirement protocol
+   *  if primary, hand off duty
+   *  stop looping
+   *  unblock master thread
+   */
+  public void retire(int src) {
+    if (isPrimary) {
+      // set up new primary with current CNS counter, globally unique
+      send(new PrimaryHandOffMsg(pid, src, csnStamp));
+    }
+    retired =true;
+    // wake up the blocked master
+    notifyAll();
   }
 }

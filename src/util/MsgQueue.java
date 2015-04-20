@@ -6,7 +6,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * Created by xiaofan on 3/30/15.
+ * Blocking Messsage Queue
  * ref: http://tutorials.jenkov.com/java-concurrency/blocking-queues.html
  */
 public class MsgQueue {

@@ -48,6 +48,10 @@ public class Master {
 	       * Retire the server with the id specified. This should block until
 	       * the server can tell another server of its retirement
          */
+        assert nodes[serverId] != null;
+        assert nodes[serverId] instanceof Server;
+        Server s = (Server)nodes[serverId];
+        s.toRetire();
 
       } else if (inputLine[0].equals("joinClient")) {
         clientId = Integer.parseInt(inputLine[1]);
