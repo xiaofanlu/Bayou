@@ -23,8 +23,8 @@ public class AEAckMsg extends Message {
   }
 
   public String toString() {
-    return super.toString() + " Anti_entropy_ack: "
-            + write.toString() + " Commit?" + commit;
+    return super.toString() + "Anti_entropy_ack: "
+            + write.toString() + " C?" + commit;
   }
 
 }

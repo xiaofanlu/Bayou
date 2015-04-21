@@ -2,21 +2,16 @@ package exec;
 
 import command.*;
 import msg.*;
-import util.PlayList;
-import util.ReplicaID;
-import util.Write;
-import util.WriteLog;
+import util.*;
 
 import java.util.*;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Server/Replica class
  */
 public class Server extends NetNode {
-  int timeStamp = 0;
-  int csnStamp = 0;
+  int timeStamp = 1;
+  int csnStamp = 1;
   boolean isPrimary = false;
 
   int maxCSN = 0;
@@ -27,12 +22,12 @@ public class Server extends NetNode {
   PlayList playList = new PlayList();
   WriteLog writeLog = new WriteLog();
 
-  Map<String, Integer> versionVector = new HashMap<String, Integer>();
+  VersionVector vv = new VersionVector();
 
 
   boolean toRetire = false;
   boolean retired = false;
-  public Lock retireLock = new ReentrantLock();
+
   /**
    * Primary server, start with id = 0
    * @param id
@@ -65,6 +60,9 @@ public class Server extends NetNode {
   }
 
   public int nextTimeStamp () {
+    if (debug) {
+      print("nextTimeStamp: " + timeStamp);
+    }
     return ++timeStamp;
   }
 
@@ -74,6 +72,9 @@ public class Server extends NetNode {
 
   public int getCSN() {
     maxCSN = csnStamp;
+    if (debug) {
+      print("Get new CSN: " + csnStamp);
+    }
     return csnStamp++;
   }
 
@@ -104,7 +105,7 @@ public class Server extends NetNode {
 
       /* anti-entropy messages */
       else if (msg instanceof AERqstMsg) {
-        send(new AERplyMsg(pid, msg.src, versionVector, maxCSN));
+        send(new AERplyMsg(pid, msg.src, vv, maxCSN));
       } else if (msg instanceof AERplyMsg) {
         AERplyMsg m = (AERplyMsg) msg;
         anti_entropy(m);
@@ -133,7 +134,7 @@ public class Server extends NetNode {
   public void setUpServer(CreateReplyMsg cReply) {
     rid = cReply.rid;
     timeStamp = rid.acceptTime + 1;
-    versionVector.put(rid.toString(), currTimeStamp());
+    vv.put(rid.toString(), 0);
   }
 
 
@@ -172,7 +173,7 @@ public class Server extends NetNode {
    *   relevant read?
    */
   public void originalClientCmd (ClientMsg rqst) {
-    if (!rqst.sm.isDominatedBy(versionVector)) {
+    if (!rqst.sm.isDominatedBy(vv)) {
       send(new ClientReplyMsg(rqst));
       return;
     }
@@ -182,7 +183,7 @@ public class Server extends NetNode {
         int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
         Write write = new Write(csn, acceptTime, rid, rqst.cmd);
         writeLog.add(write);
-        versionVector.put(rid.toString(), currTimeStamp());
+        vv.put(rid.toString(), currTimeStamp());
         send(new ClientReplyMsg(rqst, write));
         doGossip();
       } else {
@@ -206,12 +207,13 @@ public class Server extends NetNode {
     int acceptTime = nextTimeStamp();
     ReplicaID newId = new ReplicaID(acceptTime, rid, msg.src);
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
-    Create create = new Create(rid, acceptTime);
+    Create create = new Create(newId, acceptTime);
     Write entry = new Write(csn, acceptTime, rid, create);
     writeLog.add(entry);
 
-    versionVector.put(rid.toString(), currTimeStamp());
-    versionVector.put(newId.toString(), 0);
+    vv.put(rid.toString(), currTimeStamp());
+    //Todo: why?
+    vv.put(newId.toString(), currTimeStamp() + 1);
 
     // send ack to server
     send(new CreateReplyMsg(pid, msg.src, newId));
@@ -225,6 +227,19 @@ public class Server extends NetNode {
    * Complex logic, can be buggy
    */
   public void anti_entropy(AERplyMsg msg) {
+    if (debug) {
+      System.out.println("\n\n");
+      System.out.println("\n\n");
+      print("Anti_Entropy:");
+      System.out.println("My VV: " + vv.toString());
+      System.out.println("Server " + msg.src + "'s VV: " + msg.vv.toString());
+      System.out.println(writeLog);
+
+      System.out.println("\n\n");
+      System.out.println("\n\n");
+    }
+
+
     Iterator<Write> it = writeLog.getIterator();
     while (it.hasNext()) {
       Write w = it.next();
@@ -294,7 +309,10 @@ public class Server extends NetNode {
       }
       writeLog.add(w);
       refreshPlayList();
-      versionVector.put(rid.toString(), currTimeStamp());
+
+      vv.put(rid.toString(), currTimeStamp());
+      vv.put(w.replicaId.toString(), w.acceptTime);
+
       // update maxCSN;
       if (!isPrimary() && w.csn != Integer.MAX_VALUE) {
         maxCSN = Math.max(maxCSN, w.csn);
@@ -330,15 +348,15 @@ public class Server extends NetNode {
         }
       } else if (cmd instanceof ServerCmd) {
         ServerCmd scmd = (ServerCmd) cmd;
-        if (cmd instanceof Create) {
+        if (scmd instanceof Create) {
           String id = scmd.rid.toString();
-          if (!versionVector.containsKey(id)) {
-            versionVector.put(id, 0);
+          if (!vv.hasKey(id)) {
+            vv.put(id, scmd.acceptTime);
           }
-        } else if (cmd instanceof Retire) {
+        } else if (scmd instanceof Retire) {
           String id = scmd.rid.toString();
-          if (versionVector.containsKey(id)) {
-            versionVector.remove(id);
+          if (vv.hasKey(id)) {
+            vv.remove(id);
           }
           if (connected.contains(scmd.rid.pid)) {
             connected.remove(scmd.rid.pid);
@@ -395,13 +413,13 @@ public class Server extends NetNode {
    * Issue retire write to itself
    * must be called by Master thread for blocking.
    */
-  public void toRetire() {
+  public synchronized void toRetire() {
     int acceptTime = nextTimeStamp();
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
     Retire rcmd = new Retire(rid, acceptTime);
     Write entry = new Write(csn, acceptTime, rid, rcmd);
     writeLog.add(entry);
-    versionVector.put(rid.toString(), currTimeStamp());
+    vv.put(rid.toString(), currTimeStamp());
 
     /* assume has at least one neighbor right now (piazza @86)
      * otherwise need keep gossiping periodically.
@@ -424,7 +442,7 @@ public class Server extends NetNode {
    *  stop looping
    *  unblock master thread
    */
-  public void retire(int src) {
+  public synchronized void retire(int src) {
     if (isPrimary) {
       // set up new primary with current CNS counter, globally unique
       send(new PrimaryHandOffMsg(pid, src, csnStamp));

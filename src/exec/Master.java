@@ -19,7 +19,7 @@ public class Master {
       int clientId, serverId, id1, id2;
       String songName, URL;
       if (Constants.debug) {
-        System.out.println("Command: " + Arrays.toString(inputLine));
+        System.out.println("\n\nCommand: " + Arrays.toString(inputLine));
       }
 
 

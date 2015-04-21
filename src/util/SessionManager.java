@@ -39,8 +39,8 @@ public class SessionManager implements Serializable {
    * @param vv Version Vector
    * @return whether Version Vector dominates both Read/Write Vector
    */
-  public boolean isDominatedBy(Map<String, Integer> vv) {
-    return dominates(vv, readVector) && dominates(vv, writeVector);
+  public boolean isDominatedBy(VersionVector vv) {
+    return dominates(vv.vector, readVector) && dominates(vv.vector, writeVector);
   }
 
   /**

@@ -24,7 +24,20 @@ public class WriteLog {
   }
 
   public void add (Write entry) {
-    log.offer(entry);
+    if (!contains(entry)) {
+      log.offer(entry);
+    }
+  }
+
+  public boolean contains(Write entry) {
+    Iterator<Write> it = getIterator();
+    while (it.hasNext()) {
+      Write w = it.next();
+      if (w.sameAs(entry) ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -78,13 +91,26 @@ public class WriteLog {
         System.out.print("DELETE:(");
         System.out.print(cmd.song);
       } else {
-        System.out.print("UNKNOWN:(");
+        continue;
+        //System.out.print("UNKNOWN:(");
       }
       System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?
                                                   "FALSE" : "TRUE"));
     }
   }
 
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    Iterator<Write> it = getIterator();
+    sb.append("++++++++++++++ Write Log +++++++++++++++\n");
+    while (it.hasNext()) {
+      Write cur = it.next();
+      sb.append(cur.toString());
+      sb.append('\n');
+    }
+    sb.append("++++++++++++++ Write End +++++++++++++++\n");
+    return sb.toString();
+  }
 
   /**
    * Build iterator on a new copy of queue

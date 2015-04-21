@@ -10,6 +10,7 @@ start
 joinClient 4 0
 joinClient 5 3
 put 4 a 123
+stabilize
 put 5 b 456
 stabilize
 get 4 b

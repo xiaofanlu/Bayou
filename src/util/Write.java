@@ -48,6 +48,8 @@ public class Write implements Comparable<Write>, Serializable {
     sb.append(acceptTime);
     sb.append(", ");
     sb.append(replicaId.toString());
+    sb.append(", ");
+    sb.append(command.toString());
     sb.append(") ");
     return sb.toString();
   }
