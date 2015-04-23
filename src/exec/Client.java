@@ -95,6 +95,31 @@ public class Client extends NetNode {
     ClientMsg rqst = new ClientMsg (pid, serverId, cmd, sm);
     send(rqst);
   }
+  /*
+   * YW: disconnect with server
+   * @param disconnectedServerId
+   */
+  public void disconnectWith (int disconnectServerId){
+	  if(disconnectServerId == this.serverId){ //the node is currently connected to disconnectServerId
+		  serverId = -1; // Indication of not currently connected
+	  }else{
+		  //Do nothing or display no server connected
+	  }
+  }
+  /*
+   * YW: connect with server
+   * @param connectedServerId
+   */
+  public void connectTo (int connectServerId){
+	  if(serverId == -1){
+		  serverId = connectServerId;
+	  }else if(serverId == connectServerId){
+		  // Do nothing, already connected to current server
+	  }else{
+		  //Display error message, connecting to multiple servers
+	  }
+  }
+  
 }
 
 

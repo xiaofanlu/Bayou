@@ -75,10 +75,14 @@ public class Master {
           s1.disconnectWith(id2);
           Server s2 = (Server)nodes[id2];
           s2.disconnectWith(id1);
-        } else if (nodes[id1] instanceof Client) {
-
-        } else if (nodes[id2] instanceof Client) {
-
+        } else if (nodes[id1] instanceof Client && nodes[id2] instanceof Server) {
+        	//YW
+        	Client c = (Client)nodes[id1];
+        	c.disconnectWith(id2);
+        } else if (nodes[id2] instanceof Client && nodes[id1] instanceof Server) {
+        	//YW
+        	Client c = (Client)nodes[id2];
+        	c.disconnectWith(id1);
         } else {
 
         }
@@ -96,10 +100,14 @@ public class Master {
           s1.connectTo(id2);
           Server s2 = (Server)nodes[id2];
           s2.connectTo(id1);
-        } else if (nodes[id1] instanceof Client) {
-
-        } else if (nodes[id2] instanceof Client) {
-
+        } else if (nodes[id1] instanceof Client && nodes[id2] instanceof Server) {
+        	//YW
+        	Client c = (Client)nodes[id1];
+        	c.connectTo(id2);
+        } else if (nodes[id2] instanceof Client && nodes[id1] instanceof Server) {
+        	//YW
+        	Client c = (Client)nodes[id2];
+        	c.connectTo(id1);
         } else {
 
         }
