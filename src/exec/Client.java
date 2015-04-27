@@ -55,7 +55,9 @@ public class Client extends NetNode {
         }
         if (rqstRply.cmd instanceof Get) {
           if (rqstRply.suc) {
-            sm.updateRead(rqstRply.write);
+            if (!rqstRply.url.equals("NOT_FOUND")) {
+              sm.updateRead(rqstRply.write);
+            }
             System.out.println(rqstRply.cmd.song + ":" + rqstRply.url);
           } else {
             System.out.println(rqstRply.cmd.song + ":ERR_DEP");
@@ -71,6 +73,10 @@ public class Client extends NetNode {
    * @param url  value
    */
   public void put (String name, String url) {
+    if (serverId < 0) {
+      System.out.println("disconnected with Server!");
+      return;
+    }
     ClientCmd cmd = new Put(name, url);
     ClientMsg rqst = new ClientMsg(pid, serverId, cmd, sm);
     send(rqst);
@@ -81,6 +87,10 @@ public class Client extends NetNode {
    * @param name key
    */
   public void del (String name) {
+    if (serverId < 0) {
+      System.out.println("disconnected with Server!");
+      return;
+    }
     ClientCmd cmd = new Del(name);
     ClientMsg rqst = new ClientMsg (pid, serverId, cmd, sm);
     send(rqst);
@@ -91,9 +101,22 @@ public class Client extends NetNode {
    * @param name key
    */
   public void get (String name) {
+    if (serverId < 0) {
+      System.out.println("disconnected with Server!");
+      return;
+    }
     ClientCmd cmd = new Get(name);
     ClientMsg rqst = new ClientMsg (pid, serverId, cmd, sm);
     send(rqst);
+  }
+
+
+  public void connectTo(int id) {
+    serverId = id;
+  }
+
+  public void disConnect() {
+    serverId = -1;
   }
 }
 

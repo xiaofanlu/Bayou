@@ -88,6 +88,9 @@ public class Server extends NetNode {
     while (!retired){
       Message msg = receive();
 
+      if (debug) {
+        print("Received" + msg.toString());
+      }
       /* request from client */
       if (msg instanceof ClientMsg) {
         ClientMsg rqst = (ClientMsg) msg;
@@ -132,6 +135,9 @@ public class Server extends NetNode {
    * @param cReply
    */
   public void setUpServer(CreateReplyMsg cReply) {
+    if (debug) {
+      print("Set up Server!");
+    }
     rid = cReply.rid;
     timeStamp = rid.acceptTime + 1;
     vv.put(rid.toString(), 0);
@@ -212,7 +218,6 @@ public class Server extends NetNode {
     writeLog.add(entry);
 
     vv.put(rid.toString(), currTimeStamp());
-    //Todo: why?
     vv.put(newId.toString(), currTimeStamp() + 1);
 
     // send ack to server
@@ -359,7 +364,7 @@ public class Server extends NetNode {
             vv.remove(id);
           }
           if (connected.contains(scmd.rid.pid)) {
-            connected.remove(scmd.rid.pid);
+            connected.remove(((Integer)scmd.rid.pid));
           }
         }
       }
@@ -441,6 +446,8 @@ public class Server extends NetNode {
    *  if primary, hand off duty
    *  stop looping
    *  unblock master thread
+   *
+   *  release all resources
    */
   public synchronized void retire(int src) {
     if (isPrimary) {
@@ -448,6 +455,8 @@ public class Server extends NetNode {
       send(new PrimaryHandOffMsg(pid, src, csnStamp));
     }
     retired =true;
+    shutdown = true;
+    nc.shutdown();
     // wake up the blocked master
     notifyAll();
   }

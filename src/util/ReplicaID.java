@@ -41,7 +41,7 @@ public class ReplicaID implements Serializable {
     if (parent == null) {
       return "rid(root)";
     } else {
-      return "rid(" + acceptTime + ", " + parent + " )";
+      return "rid(" + acceptTime + ", " + parent + ")";
     }
   }
 }

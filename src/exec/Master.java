@@ -24,6 +24,9 @@ public class Master {
 
 
       if (inputLine[0].equals("joinServer")) {
+        if (Constants.debug) {
+          System.out.print("Current Servers" + curServers);
+        }
         serverId = Integer.parseInt(inputLine[1]);
         /**
          * Start up a new server with this id and connect it to all servers
@@ -52,6 +55,7 @@ public class Master {
         assert nodes[serverId] instanceof Server;
         Server s = (Server)nodes[serverId];
         s.toRetire();
+        curServers.remove((Integer)serverId);
 
       } else if (inputLine[0].equals("joinClient")) {
         clientId = Integer.parseInt(inputLine[1]);
@@ -76,11 +80,15 @@ public class Master {
           Server s2 = (Server)nodes[id2];
           s2.disconnectWith(id1);
         } else if (nodes[id1] instanceof Client) {
-
+          assert nodes[id2] instanceof Server;
+          Client c = (Client)nodes[id1];
+          c.disConnect();
         } else if (nodes[id2] instanceof Client) {
-
+          assert nodes[id1] instanceof Server;
+          Client c = (Client)nodes[id2];
+          c.disConnect();
         } else {
-
+          System.out.println("Invalid Operation, disconnecting two clients");
         }
       } else if (inputLine[0].equals("restoreConnection")) {
         id1 = Integer.parseInt(inputLine[1]);
@@ -97,11 +105,15 @@ public class Master {
           Server s2 = (Server)nodes[id2];
           s2.connectTo(id1);
         } else if (nodes[id1] instanceof Client) {
-
+          assert nodes[id2] instanceof Server;
+          Client c = (Client)nodes[id1];
+          c.connectTo(id2);
         } else if (nodes[id2] instanceof Client) {
-
+          assert nodes[id1] instanceof Server;
+          Client c = (Client)nodes[id2];
+          c.connectTo(id1);
         } else {
-
+          System.out.println("Invalid Operation, connecting two clients");
         }
 
       } else if (inputLine[0].equals("pause")) {
@@ -109,12 +121,18 @@ public class Master {
           * Pause the system and don't allow any Anti-Entropy messages to
 	        * propagate through the system
           */
+          for (int id : curServers) {
+            nodes[id].pause();
+          }
 
       } else if (inputLine[0].equals("start")) {
          /**
           * Resume the system and allow any Anti-Entropy messages to
 	        * propagate through the system
 	        */
+        for (int id : curServers) {
+          nodes[id].unPause();
+        }
 
       } else if (inputLine[0].equals("stabilize")) {
           /**

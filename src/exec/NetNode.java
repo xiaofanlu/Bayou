@@ -47,7 +47,7 @@ public class NetNode extends Thread {
   /**
    * can't use start() as it is reserved for Thread start()
    */
-  public void noPause() {
+  public void unPause() {
     pause = false;
   }
 
