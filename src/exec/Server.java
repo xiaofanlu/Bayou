@@ -6,6 +6,7 @@ import util.PlayList;
 import util.ReplicaID;
 import util.Write;
 import util.WriteLog;
+import util.UndoLog;
 
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -26,15 +27,17 @@ public class Server extends NetNode {
   ArrayList<Integer> connected = new ArrayList<Integer>();
   PlayList playList = new PlayList();
   WriteLog writeLog = new WriteLog();
+  UndoLog undoLog = new UndoLog();
 
   Map<String, Integer> versionVector = new HashMap<String, Integer>();
 
 
   boolean toRetire = false;
   boolean retired = false;
+  boolean started = false; // YW: boolean of whether the server has registered at other server, has a Replica id and accept-stamp
   public Lock retireLock = new ReentrantLock();
   /**
-   * Primary server, start with id = 0
+   * Primary server, start with id = 0 //YW not with id 0
    * @param id
    */
   public Server(int id) {
@@ -86,6 +89,10 @@ public class Server extends NetNode {
     }
     while (!retired){
       Message msg = receive();
+      /*YW: if not started, only accept CreateReplyMsg*/
+      if(!started && !(msg instanceof CreateReplyMsg)){
+    	  continue;
+      }
 
       /* request from client */
       if (msg instanceof ClientMsg) {
@@ -115,12 +122,19 @@ public class Server extends NetNode {
         AEAckMsg ackMsg = (AEAckMsg) msg;
         antiEntropyACKHandler(ackMsg);
       }
+      // Handling AEMultiAckMsg
+      else if(msg instanceof AEMultiAckMsg){
+    	  AEMultiAckMsg multiAckMsg = (AEMultiAckMsg)msg;
+    	  antiEntropyMultiACKHandler(multiAckMsg);
+      }
 
       /* primary handoff Message */
       else if (msg instanceof PrimaryHandOffMsg) {
         PrimaryHandOffMsg pho = (PrimaryHandOffMsg) msg;
         isPrimary = true;
         csnStamp = pho.curCSN;
+        //YW: Change all tentative writes to committed writes
+        startPrimary();
       }
     }
   }
@@ -134,6 +148,7 @@ public class Server extends NetNode {
     rid = cReply.rid;
     timeStamp = rid.acceptTime + 1;
     versionVector.put(rid.toString(), currTimeStamp());
+    started = true;
   }
 
 
@@ -177,6 +192,23 @@ public class Server extends NetNode {
       return;
     }
     if (rqst.isWrite()) {
+    	//YW: change how playlist is updated to help update undo list
+    	if(playList.checkFeasibility(rqst.cmd)){
+    		int acceptTime = nextTimeStamp();
+    		int csn = isPrimary()?getCSN():Integer.MAX_VALUE;
+    		Write write = new Write(csn,acceptTime, rid, rqst.cmd);
+    		undo(write);
+    		writeLog.add(write);
+    		updatePlayList(write);
+    		versionVector.put(rid.toString(), this.currTimeStamp());
+    		send(new ClientReplyMsg(rqst,write));
+    		doGossip();
+    	}else{
+    		//YW: Drop the write
+            send(new ClientReplyMsg(rqst));
+    	}
+    		
+    	/*	
       if (playList.update(rqst.cmd)) {
         int acceptTime = nextTimeStamp();
         int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
@@ -187,7 +219,7 @@ public class Server extends NetNode {
         doGossip();
       } else {
         send(new ClientReplyMsg(rqst));
-      }
+      }*/
     } else if (rqst.isRead()) {
       String song = rqst.cmd.song;
       String url = playList.get(song);
@@ -208,11 +240,14 @@ public class Server extends NetNode {
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
     Create create = new Create(rid, acceptTime);
     Write entry = new Write(csn, acceptTime, rid, create);
+    
+    undo(entry);
     writeLog.add(entry);
-
+    updatePlayList(entry); // Update UndoLog for this write
+    
     versionVector.put(rid.toString(), currTimeStamp());
-    versionVector.put(newId.toString(), 0);
-
+    //versionVector.put(newId.toString(), 0);//YW: what about creating version with acceptTime ?
+    versionVector.put(newId.toString(), acceptTime); // TODO: Check whether this is necessary
     // send ack to server
     send(new CreateReplyMsg(pid, msg.src, newId));
     // update with neighbors, anti-entropy
@@ -243,7 +278,10 @@ public class Server extends NetNode {
             /* R don't have the write, add committed write  */
             send(new AEAckMsg(pid, msg.src, w));
           }
-        } else {
+        }
+        /* YW: this else condition is not necessary, sender just send 
+        all the writes to receiver and let receiver decide*/
+        else { 
           /*  the Missing VV entry, don't know of rjID ...  */
           int riVrk = msg.hasKey(rkID) ? msg.getTime(rkID) : -1;
           int TSkj = w.replicaId.acceptTime;
@@ -268,7 +306,32 @@ public class Server extends NetNode {
       }
     }
   }
-
+  
+  /**
+   * YW: handler for anti-entropy reply at Sender, sends AEMultiAckMsg to receiver to update receiver's writelog
+   * @param aeReplyMsg
+   */
+  public void antiEntropyReplyHandler(AERplyMsg replyMsg){
+	  Iterator<Write> iter = writeLog.getIterator();
+	  AEMultiAckMsg aeMultiAckMsg = new AEMultiAckMsg(pid, replyMsg.src);
+	  while(iter.hasNext()){
+		  Write wr = iter.next();
+		  String ownerServer = wr.replicaId.toString();
+		  String parentServer = wr.replicaId.parent.toString(); // Parent of the 
+		  if(wr.csn <= replyMsg.CNS){// If the write is already committed in the receiver, ignore this write
+			  continue;
+		  }
+		  else{
+			  Integer completeVersion = completeV(replyMsg.versionVector,wr.replicaId);
+			  if (wr.acceptTime <= completeVersion){ // If the receiver has the write but doesn't know the write is committed
+				  aeMultiAckMsg.addMsg(new AEAckMsg(pid, replyMsg.src, wr, true));
+			  }else{ // The receiver does not know the write
+				  aeMultiAckMsg.addMsg(new AEAckMsg(pid,replyMsg.src,wr));
+			  }
+		  }
+	  }
+	  send(aeMultiAckMsg);
+  }
 
   /**
    * handler for write updates through anti-entropy process
@@ -306,6 +369,68 @@ public class Server extends NetNode {
         doGossip(ackMsg.src);
       }
     }
+  }
+  
+  /**
+   * YW: handler for packed multiple ACKs
+   */
+  
+  public void antiEntropyMultiACKHandler(AEMultiAckMsg multiAckMsg){
+	  if(multiAckMsg.msgList.isEmpty()){// if no updates acquired, do nothing
+		  return;
+	  }
+	  AEAckMsg firstAckMsg = (AEAckMsg) multiAckMsg.msgList.get(0);
+	  Write firstWrite = firstAckMsg.write; // The first change in writelog
+	  boolean newCommitted = false;
+	  //1. Accept all writes
+	  for(Message msg : multiAckMsg.msgList){
+		  if(msg instanceof AEAckMsg){
+			  AEAckMsg tempMsg = (AEAckMsg) msg;
+			  boolean writeNotReceived = updateVersionVector(tempMsg.write);
+			  
+			  if(tempMsg.commit){
+				  if (writeLog.commit(tempMsg.write)) {
+					/* successfully updated */
+					  maxCSN = Math.max(maxCSN, tempMsg.write.csn);
+			      }else{
+			    	  //write not found in writelog
+			      }
+			  }else{
+			      Write w = tempMsg.write;
+				  if(!writeNotReceived){ // The write is already received before
+				      if (w.csn == Integer.MAX_VALUE) {// ignore already received tentative write
+				    	  continue;
+				      }else{
+				    	  if(writeLog.commit(w)){
+				    		  maxCSN = Math.max(maxCSN, w.csn);
+				    	  }
+				      }
+				  }
+				  else{// Write not received before
+					  if (isPrimary() && tempMsg.write.csn == Integer.MAX_VALUE) {
+						  w.csn = getCSN();
+						  newCommitted = true;
+					  }
+					  writeLog.add(w);
+				      if (!isPrimary() && w.csn != Integer.MAX_VALUE) {
+				    	  maxCSN = Math.max(maxCSN, w.csn);
+				      }
+			      }
+			  }
+		  }else{
+			  //Something wrong with the generation of AEMultiAckMsg
+		  }
+	  }
+	  //2. Undo till the first Write
+      undo(firstWrite);
+	  //3. Update playlist and accordingly the undo list
+	  updatePlayList(firstWrite);
+	  
+      if (newCommitted) {
+        doGossip();
+      } else {
+        doGossip(multiAckMsg.src);
+      }
   }
 
 
@@ -433,4 +558,142 @@ public class Server extends NetNode {
     // wake up the blocked master
     notifyAll();
   }
+  
+  /**
+   * YW: Complete version vector (deciding whether the server is known retired to a version vector)
+   * @param Version Vector, ReplicaID
+   */
+  public Integer completeV(Map<String, Integer> vv,ReplicaID S){
+	  if(vv.containsKey(S.toString())){
+		  return vv.get(S);
+	  }else if(S.parent == null){
+		  return Integer.MAX_VALUE;
+	  }else{
+		  ReplicaID parent_rid = S.parent;
+		  if(completeV(vv, S.parent) >= S.acceptTime){
+			  return Integer.MAX_VALUE;
+		  }else{
+			  return Integer.MIN_VALUE;
+		  }
+	  }
+  }
+  /**
+   * YW: Helper function to update version vector based on write, return true if write accepted, return false if not
+   */
+  public boolean updateVersionVector(Write wr){
+
+	  ReplicaID writeRid = wr.replicaId;
+	  Integer completeVersion = completeV(versionVector, writeRid); // return the complete version of the Write's RID
+	  boolean ans;
+	  
+	  if(completeVersion < wr.acceptTime){//Write not seen before, update version vector
+		  if(wr.command instanceof ServerCmd){ // The creation/Retire information is not received before
+			  ServerCmd serverCmd = (ServerCmd) wr.command;
+			  if(serverCmd instanceof Create){
+				  versionVector.put(serverCmd.rid.toString(), serverCmd.acceptTime);
+			  }else if(serverCmd instanceof Retire){
+				  versionVector.remove(serverCmd.rid.toString());
+			  }
+		  }
+		  versionVector.put(wr.replicaId.toString(), wr.acceptTime);
+		  ans = true;
+	  }else{ // Write already received, no need to update
+		  ans = false;
+	  }  
+	  return ans;
+  }
+  
+  /**
+	 * Update the playlist according to writelog, and update undo log as well (Combine undo and update to replace refreshPlayList)
+	 * version vector is already updated when the write is received
+	 * @param firstChange
+	 */
+	public void updatePlayList(Write firstChange){
+		Iterator<Write> it = writeLog.getIterator();
+		while(it.hasNext()){
+			Write tempWrite = it.next();
+			//Write copyWrite = new Write(tempWrite);
+			//copyWrite.command = new Command(); //Do nothing, a void command
+			Command cmd = tempWrite.command;
+			if(tempWrite.compareTo(firstChange)>=0){
+				Write copyWrite = getUndoEntry(tempWrite);
+				if(copyWrite.csn < Integer.MAX_VALUE){
+					// committed, don't need undo log
+					continue;
+				}
+				else{ // for tentative write, first push generated undoentry to undolog, then update playlist
+					undoLog.push(copyWrite);
+					if(cmd instanceof ClientCmd){
+						playList.update((ClientCmd) cmd);
+					}
+				}
+			}else{
+				// write is before the first changed write, ignore
+			}
+			if(cmd instanceof Retire){
+				Retire retireCmd = (Retire) cmd;
+				if (connected.contains(retireCmd.rid.pid)) {
+					connected.remove(retireCmd.rid.pid);
+				}
+			}
+		}
+		
+	}//updata undo log for corresponding write
+	/**
+	 * Generate undo log for each write
+	 * @return
+	 */
+	public Write getUndoEntry(Write wr){
+		Write copyWrite = new Write(wr);
+		Command cmd = wr.command;
+		if(cmd instanceof ClientCmd){ // if command is client command and not committed
+			if(cmd instanceof Put){
+				Put put = (Put) cmd;
+				if(playList.containsSong(put.song)){ // There is song same in the playlist
+					copyWrite.command = new Put(put.song,playList.get(put.song));
+				}else{// The song is new to playlist
+					copyWrite.command = new Del(put.song);
+				}
+			}else if(cmd instanceof Del){
+				Del del = (Del) cmd;
+				if(playList.containsSong(del.song)){ // If the song exists, put song back
+					copyWrite.command = new Put(del.song,playList.get(del.song));
+				}else{ // Song doesn't exist, no need to change undo list
+				}
+			}else{// cmd instance of Get
+			}
+		}else{ // not ClientCmd, just push original write to Undo Log
+		}
+		return copyWrite;
+	}
+	
+	/**
+	 * YW: Undo the playlist until reaching the earlist write
+	 */
+	public void undo(Write wr){
+		while(!undoLog.isEmpty() && undoLog.lastEntry().compareTo(wr) >= 0){
+			Command cmd = undoLog.pop().command;
+			if(cmd instanceof ClientCmd){
+				playList.update((ClientCmd)cmd);
+			}
+		}
+	}
+	
+	/**
+	 * YW: Called when become primary server, commit all tentative writes in writeLog
+	 */
+	public void startPrimary(){
+		Iterator<Write> it = writeLog.getIterator();
+		while(it.hasNext()){
+			Write tempWrite = it.next();
+			if(tempWrite.csn < Integer.MAX_VALUE){
+				continue;
+			}
+			else{
+				tempWrite.csn = this.getCSN(); // commit tentative writes
+			}
+		}
+	}
+  
+  
 }

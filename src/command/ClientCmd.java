@@ -7,6 +7,10 @@ public class ClientCmd extends Command {
   public String song;
   public String url;
 
+  public ClientCmd(ClientCmd cmd){
+	  song = cmd.song;
+	  url = cmd.url;
+  }
   public ClientCmd (String s) {
     song = s;
     url = "";

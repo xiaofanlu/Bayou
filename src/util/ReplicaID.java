@@ -21,6 +21,16 @@ public class ReplicaID implements Serializable {
     parent = null;
     pid = -1;
   }
+  
+  public ReplicaID(ReplicaID rid){
+	  this.acceptTime = rid.acceptTime;
+	  if(rid.parent == null){
+		  this.parent = null;
+	  }else{
+		  this.parent = new ReplicaID(rid.parent);
+	  }
+	  this.pid = rid.pid;
+  }
 
   /**
    * The very first replica

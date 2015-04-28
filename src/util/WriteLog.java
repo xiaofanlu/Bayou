@@ -85,6 +85,14 @@ public class WriteLog {
     }
   }
 
+  public Write getLast(){// return the last entry in WriteLog
+	    Iterator<Write> it = getIterator();
+	    Write last = null;
+	    while(it.hasNext()){
+	    	last = it.next();
+	    }
+	    return last;
+  }
 
   /**
    * Build iterator on a new copy of queue

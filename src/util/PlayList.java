@@ -41,6 +41,10 @@ public class PlayList {
     }
   }
 
+  public boolean checkFeasibility(ClientCmd cmd){
+	  return pl.containsKey(cmd.song);
+  }
+  
   public boolean update (ClientCmd cmd) {
     if (cmd instanceof Put) {
       return add(cmd.song, cmd.url);

@@ -21,6 +21,13 @@ public class Write implements Comparable<Write>, Serializable {
     replicaId = rid;
     command = cmd;
   }
+  
+  public Write(Write wr){
+	  this.csn = wr.csn;
+	  this.acceptTime = wr.acceptTime;
+	  this.replicaId = new ReplicaID(wr.replicaId);
+	  this.command = new Command(wr.command);
+  }
 
   @Override
   public int compareTo(Write other) {

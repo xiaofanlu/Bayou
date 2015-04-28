@@ -9,6 +9,11 @@ public class ServerCmd extends Command {
   public ReplicaID rid;
   public int acceptTime;
 
+  public ServerCmd(ServerCmd cmd){
+	  this.rid = new ReplicaID(cmd.rid);
+	  this.acceptTime = cmd.acceptTime;
+  }
+  
   public ServerCmd (ReplicaID rid, int acptTime) {
     this.rid = rid;
     acceptTime = acptTime;

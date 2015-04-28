@@ -52,6 +52,16 @@ public class Master {
         assert nodes[serverId] instanceof Server;
         Server s = (Server)nodes[serverId];
         s.toRetire();
+        //YW:
+        curServers.remove(serverId);
+        for(int i : curServers){
+        	if(nodes[i] instanceof Server){
+        		Server temp_node = (Server)nodes[i];
+        		temp_node.disconnectWith(serverId);
+        	}// Other servers disconnects with servers
+        	//Clients should disconnect with server based on how retire works
+        }
+        //Disconnect all links between serverId and servers / clients
 
       } else if (inputLine[0].equals("joinClient")) {
         clientId = Integer.parseInt(inputLine[1]);
@@ -117,12 +127,25 @@ public class Master {
           * Pause the system and don't allow any Anti-Entropy messages to
 	        * propagate through the system
           */
+    	  /*
+    	   * YW
+    	   */
+    	  for (NetNode node : nodes){
+    		  if(node != null){
+    			  node.pause();
+    		  }
+    	  }
 
       } else if (inputLine[0].equals("start")) {
          /**
           * Resume the system and allow any Anti-Entropy messages to
 	        * propagate through the system
 	        */
+    	  for (NetNode node : nodes){
+    		  if(node != null){
+    			  node.noPause();
+    		  }
+    	  }
 
       } else if (inputLine[0].equals("stabilize")) {
           /**
