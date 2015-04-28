@@ -22,7 +22,6 @@ public class Server extends NetNode {
 
   int maxCSN = 0;
 
-
   ReplicaID rid = null;
   ArrayList<Integer> connected = new ArrayList<Integer>();
   PlayList playList = new PlayList();
@@ -30,7 +29,6 @@ public class Server extends NetNode {
   UndoLog undoLog = new UndoLog();
 
   Map<String, Integer> versionVector = new HashMap<String, Integer>();
-
 
   boolean toRetire = false;
   boolean retired = false;
@@ -44,6 +42,7 @@ public class Server extends NetNode {
     super(id);
     rid = new ReplicaID(id);
     isPrimary = true;
+    started = true;
     start();
   }
 
@@ -75,7 +74,7 @@ public class Server extends NetNode {
     return timeStamp;
   }
 
-  public int getCSN() {
+  public int getCSN() { // YW: only called when committing a new write as primary server
     maxCSN = csnStamp;
     return csnStamp++;
   }
@@ -91,6 +90,9 @@ public class Server extends NetNode {
       Message msg = receive();
       /*YW: if not started, only accept CreateReplyMsg*/
       if(!started && !(msg instanceof CreateReplyMsg)){
+    	  if(debug){
+    		  System.out.println("YW: Message received before started" + msg.toString());
+    	  }
     	  continue;
       }
 
@@ -104,28 +106,31 @@ public class Server extends NetNode {
       else if (msg instanceof CreateMsg) {
         CreateMsg create = (CreateMsg) msg;
         originalCreateCmd(create);
-      } else if (msg instanceof CreateReplyMsg) {
+      }
+      /*receive create reply msg to start up server*/
+      else if (msg instanceof CreateReplyMsg) {
         CreateReplyMsg cReply = (CreateReplyMsg) msg;
         setUpServer(cReply);
       }
-
-      /* anti-entropy messages */
+      /* anti-entropy request message */
       else if (msg instanceof AERqstMsg) {
         send(new AERplyMsg(pid, msg.src, versionVector, maxCSN));
-      } else if (msg instanceof AERplyMsg) {
+      }
+      else if (msg instanceof AERplyMsg) {
         AERplyMsg m = (AERplyMsg) msg;
-        anti_entropy(m);
+        anti_entropy(m); // YW: handle reply and send writes to receiver
         if (toRetire) {
           retire(msg.src);
         }
-      } else if (msg instanceof AEAckMsg) {
+      } 
+      else if (msg instanceof AEAckMsg) {
         AEAckMsg ackMsg = (AEAckMsg) msg;
         antiEntropyACKHandler(ackMsg);
       }
       // Handling AEMultiAckMsg
       else if(msg instanceof AEMultiAckMsg){
     	  AEMultiAckMsg multiAckMsg = (AEMultiAckMsg)msg;
-    	  antiEntropyMultiACKHandler(multiAckMsg);
+    	  antiEntropyMultiACKHandler(multiAckMsg); //YW: Receive and update writelog
       }
 
       /* primary handoff Message */
@@ -134,6 +139,7 @@ public class Server extends NetNode {
         isPrimary = true;
         csnStamp = pho.curCSN;
         //YW: Change all tentative writes to committed writes
+        maxCSN = csnStamp - 1;
         startPrimary();
       }
     }
@@ -146,7 +152,8 @@ public class Server extends NetNode {
    */
   public void setUpServer(CreateReplyMsg cReply) {
     rid = cReply.rid;
-    timeStamp = rid.acceptTime + 1;
+    //timeStamp = rid.acceptTime + 1;
+    timeStamp = rid.acceptTime; // YW: TODO: Don't need plus 1 here, since we are always assigning the next timestamp to writes
     versionVector.put(rid.toString(), currTimeStamp());
     started = true;
   }
@@ -200,11 +207,10 @@ public class Server extends NetNode {
     		undo(write);
     		writeLog.add(write);
     		updatePlayList(write);
-    		versionVector.put(rid.toString(), this.currTimeStamp());
     		send(new ClientReplyMsg(rqst,write));
     		doGossip();
     	}else{
-    		//YW: Drop the write
+    		//YW: Drop the write TODO: Is this necessary?
             send(new ClientReplyMsg(rqst));
     	}
     		
@@ -245,12 +251,21 @@ public class Server extends NetNode {
     writeLog.add(entry);
     updatePlayList(entry); // Update UndoLog for this write
     
+    /*version update is done in updatePlayList*/
+    /*
     versionVector.put(rid.toString(), currTimeStamp());
     //versionVector.put(newId.toString(), 0);//YW: what about creating version with acceptTime ?
     versionVector.put(newId.toString(), acceptTime); // TODO: Check whether this is necessary
+    */
+    
     // send ack to server
     send(new CreateReplyMsg(pid, msg.src, newId));
     // update with neighbors, anti-entropy
+    /*
+     * YW: in current setting, connection is updated after the new server started
+     * here server connect with all existing servers, while the new server do 
+     * AE with all servers.
+     */
     doGossip();
   }
 
@@ -578,7 +593,7 @@ public class Server extends NetNode {
 	  }
   }
   /**
-   * YW: Helper function to update version vector based on write, return true if write accepted, return false if not
+   * YW: Helper function to update version vector based on one single write, return true if write accepted, return false if not
    */
   public boolean updateVersionVector(Write wr){
 
@@ -612,20 +627,18 @@ public class Server extends NetNode {
 		Iterator<Write> it = writeLog.getIterator();
 		while(it.hasNext()){
 			Write tempWrite = it.next();
-			//Write copyWrite = new Write(tempWrite);
-			//copyWrite.command = new Command(); //Do nothing, a void command
 			Command cmd = tempWrite.command;
-			if(tempWrite.compareTo(firstChange)>=0){
+			if(tempWrite.compareTo(firstChange)>=0){ // Compare to the first change
 				Write copyWrite = getUndoEntry(tempWrite);
 				if(copyWrite.csn < Integer.MAX_VALUE){
-					// committed, don't need undo log
-					continue;
+					// committed, don't need undo log, but need to update playList and maxCSN
+					//maxCSN = Math.max(copyWrite.csn, maxCSN); //YW: Already contained in AEMultiAckHandler
 				}
 				else{ // for tentative write, first push generated undoentry to undolog, then update playlist
 					undoLog.push(copyWrite);
-					if(cmd instanceof ClientCmd){
-						playList.update((ClientCmd) cmd);
-					}
+				}
+				if(cmd instanceof ClientCmd){
+					playList.update((ClientCmd) cmd);
 				}
 			}else{
 				// write is before the first changed write, ignore

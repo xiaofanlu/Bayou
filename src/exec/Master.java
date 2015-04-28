@@ -33,13 +33,26 @@ public class Master {
         } else {
           nodes[serverId] = new Server(serverId, curServers.get(0));
         }
+        takeSnap(Constants.SLEEP); //YW: wait till the server is started
         curServers.add(serverId);
+        //YW: the new server should connect to all existing servers
+        //but old servers should not connect with each other
+        Server s = (Server) nodes[serverId];
+        s.updateConnected(curServers);
+        for(int i : curServers){
+        	assert nodes[i] != null;
+        	assert nodes[i] instanceof Server;
+        	if(i != serverId){
+        		((Server) nodes[i]).connectTo(serverId);
+        	}
+        }
+        /*
         for (int i: curServers) {
           assert nodes[serverId] != null;
           assert nodes[serverId] instanceof Server;
           Server s = (Server)nodes[i];
           s.updateConnected(curServers);
-        }
+        }*/
         takeSnap(Constants.SLEEP);
 
       } else if (inputLine[0].equals("retireServer")) {
