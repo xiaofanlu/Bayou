@@ -221,6 +221,9 @@ public class Server extends NetNode {
     vv.put(newId.toString(), currTimeStamp() + 1);
 
     // send ack to server
+    // some new server would ingore the first message,
+    // send a dummy message here to refresh, no side effect
+    send(new Message(pid, msg.src));
     send(new CreateReplyMsg(pid, msg.src, newId));
     // update with neighbors, anti-entropy
     doGossip();
