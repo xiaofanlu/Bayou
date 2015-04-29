@@ -118,7 +118,8 @@ public class Server extends NetNode {
       }
       else if (msg instanceof AERplyMsg) {
         AERplyMsg m = (AERplyMsg) msg;
-        anti_entropy(m); // YW: handle reply and send writes to receiver
+        //anti_entropy(m); 
+        antiEntropyReplyHandler(m);// YW: handle reply and send writes to receiver
         if (toRetire) {
           retire(msg.src);
         }
@@ -138,9 +139,9 @@ public class Server extends NetNode {
         PrimaryHandOffMsg pho = (PrimaryHandOffMsg) msg;
         isPrimary = true;
         csnStamp = pho.curCSN;
-        //YW: Change all tentative writes to committed writes
-        maxCSN = csnStamp - 1;
+        //YW: commit all tentative writes
         startPrimary();
+        doGossip();
       }
     }
   }
@@ -200,17 +201,20 @@ public class Server extends NetNode {
     }
     if (rqst.isWrite()) {
     	//YW: change how playlist is updated to help update undo list
-    	if(playList.checkFeasibility(rqst.cmd)){
+    	boolean containSong = playList.checkFeasibility(rqst.cmd);
+    	containSong = true;// YW: No need to check feasibility, double deletion is allowed
+    	if(containSong){
     		int acceptTime = nextTimeStamp();
     		int csn = isPrimary()?getCSN():Integer.MAX_VALUE;
     		Write write = new Write(csn,acceptTime, rid, rqst.cmd);
+    		updateVersionVector(write);
     		undo(write);
     		writeLog.add(write);
     		updatePlayList(write);
     		send(new ClientReplyMsg(rqst,write));
     		doGossip();
     	}else{
-    		//YW: Drop the write TODO: Is this necessary?
+    		//YW: Drop the write is not necessary, this branch is never reached
             send(new ClientReplyMsg(rqst));
     	}
     		
@@ -242,16 +246,18 @@ public class Server extends NetNode {
    */
   public void originalCreateCmd (CreateMsg msg) {
     int acceptTime = nextTimeStamp();
-    ReplicaID newId = new ReplicaID(acceptTime, rid, msg.src);
+    ReplicaID newId = new ReplicaID(acceptTime, this.rid, msg.src);
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
-    Create create = new Create(rid, acceptTime);
+    //YW: Create should contain the id of new created server's ID
+    //Create create = new Create(rid, acceptTime);
+    Create create = new Create(newId, acceptTime);
     Write entry = new Write(csn, acceptTime, rid, create);
+    updateVersionVector(entry);
     
     undo(entry);
     writeLog.add(entry);
     updatePlayList(entry); // Update UndoLog for this write
     
-    /*version update is done in updatePlayList*/
     /*
     versionVector.put(rid.toString(), currTimeStamp());
     //versionVector.put(newId.toString(), 0);//YW: what about creating version with acceptTime ?
@@ -266,6 +272,7 @@ public class Server extends NetNode {
      * here server connect with all existing servers, while the new server do 
      * AE with all servers.
      */
+	doGossip(msg.src);// Gossip with new server
     doGossip();
   }
 
@@ -331,15 +338,17 @@ public class Server extends NetNode {
 	  AEMultiAckMsg aeMultiAckMsg = new AEMultiAckMsg(pid, replyMsg.src);
 	  while(iter.hasNext()){
 		  Write wr = iter.next();
-		  String ownerServer = wr.replicaId.toString();
-		  String parentServer = wr.replicaId.parent.toString(); // Parent of the 
 		  if(wr.csn <= replyMsg.CNS){// If the write is already committed in the receiver, ignore this write
 			  continue;
 		  }
 		  else{
 			  Integer completeVersion = completeV(replyMsg.versionVector,wr.replicaId);
 			  if (wr.acceptTime <= completeVersion){ // If the receiver has the write but doesn't know the write is committed
-				  aeMultiAckMsg.addMsg(new AEAckMsg(pid, replyMsg.src, wr, true));
+				  if(wr.csn < Integer.MAX_VALUE){
+					  aeMultiAckMsg.addMsg(new AEAckMsg(pid, replyMsg.src, wr, true));
+				  }else{
+					  // Receiver has the uncommitted message, no need to send
+				  }
 			  }else{ // The receiver does not know the write
 				  aeMultiAckMsg.addMsg(new AEAckMsg(pid,replyMsg.src,wr));
 			  }
@@ -391,44 +400,46 @@ public class Server extends NetNode {
    */
   
   public void antiEntropyMultiACKHandler(AEMultiAckMsg multiAckMsg){
-	  if(multiAckMsg.msgList.isEmpty()){// if no updates acquired, do nothing
+	  if(multiAckMsg.isEmpty()){// if no updates acquired, do nothing
 		  return;
 	  }
-	  AEAckMsg firstAckMsg = (AEAckMsg) multiAckMsg.msgList.get(0);
+	  AEAckMsg firstAckMsg = (AEAckMsg) multiAckMsg.getFirst();
 	  Write firstWrite = firstAckMsg.write; // The first change in writelog
-	  boolean newCommitted = false;
+	  boolean writeLogChanged = false;
 	  //1. Accept all writes
 	  for(Message msg : multiAckMsg.msgList){
 		  if(msg instanceof AEAckMsg){
 			  AEAckMsg tempMsg = (AEAckMsg) msg;
-			  boolean writeNotReceived = updateVersionVector(tempMsg.write);
+		      Write wr = tempMsg.write;
+			  boolean writeNotReceived = updateVersionVector(wr);
 			  
-			  if(tempMsg.commit){
-				  if (writeLog.commit(tempMsg.write)) {
+			  if(tempMsg.commit){ // commit msg
+				  if (writeLog.commit(wr)) {
 					/* successfully updated */
 					  maxCSN = Math.max(maxCSN, tempMsg.write.csn);
+					  writeLogChanged = true;
 			      }else{
 			    	  //write not found in writelog
 			      }
-			  }else{
-			      Write w = tempMsg.write;
+			  }else{// write msg
 				  if(!writeNotReceived){ // The write is already received before
-				      if (w.csn == Integer.MAX_VALUE) {// ignore already received tentative write
+				      if (wr.csn == Integer.MAX_VALUE) {// ignore already received tentative write
 				    	  continue;
 				      }else{
-				    	  if(writeLog.commit(w)){
-				    		  maxCSN = Math.max(maxCSN, w.csn);
+				    	  if(writeLog.commit(wr)){
+				    		  maxCSN = Math.max(maxCSN, wr.csn);
+				    		  writeLogChanged = true;
 				    	  }
 				      }
 				  }
 				  else{// Write not received before
-					  if (isPrimary() && tempMsg.write.csn == Integer.MAX_VALUE) {
-						  w.csn = getCSN();
-						  newCommitted = true;
+					  writeLogChanged = true;
+					  if (isPrimary() && wr.csn == Integer.MAX_VALUE) {
+						  wr.csn = getCSN();
 					  }
-					  writeLog.add(w);
-				      if (!isPrimary() && w.csn != Integer.MAX_VALUE) {
-				    	  maxCSN = Math.max(maxCSN, w.csn);
+					  writeLog.add(wr);
+				      if (!isPrimary() && wr.csn != Integer.MAX_VALUE) {
+				    	  maxCSN = Math.max(maxCSN, wr.csn);
 				      }
 			      }
 			  }
@@ -441,7 +452,7 @@ public class Server extends NetNode {
 	  //3. Update playlist and accordingly the undo list
 	  updatePlayList(firstWrite);
 	  
-      if (newCommitted) {
+      if (writeLogChanged) {
         doGossip();
       } else {
         doGossip(multiAckMsg.src);
@@ -540,8 +551,10 @@ public class Server extends NetNode {
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
     Retire rcmd = new Retire(rid, acceptTime);
     Write entry = new Write(csn, acceptTime, rid, rcmd);
+    versionVector.put(this.rid.toString(), acceptTime);
+    undo(entry);
     writeLog.add(entry);
-    versionVector.put(rid.toString(), currTimeStamp());
+    updatePlayList(entry);
 
     /* assume has at least one neighbor right now (piazza @86)
      * otherwise need keep gossiping periodically.
@@ -552,7 +565,7 @@ public class Server extends NetNode {
     while (!retired) {
       try {
         wait();
-      } catch (InterruptedException e) {
+      } catch (InterruptedException e) { //YW¡Gsuppress this output
         e.printStackTrace();
       }
     }
@@ -601,7 +614,16 @@ public class Server extends NetNode {
 	  Integer completeVersion = completeV(versionVector, writeRid); // return the complete version of the Write's RID
 	  boolean ans;
 	  
+	  if(writeRid.toString().equals(this.rid.toString())){
+		  if(versionVector.get(this.rid.toString()) < wr.acceptTime){
+			  versionVector.put(this.rid.toString(), wr.acceptTime);
+		  }
+		  return true;
+	  }
+	  
 	  if(completeVersion < wr.acceptTime){//Write not seen before, update version vector
+		  versionVector.put(wr.replicaId.toString(), wr.acceptTime); // First update the version vector for write
+		  /* Handle server commands */
 		  if(wr.command instanceof ServerCmd){ // The creation/Retire information is not received before
 			  ServerCmd serverCmd = (ServerCmd) wr.command;
 			  if(serverCmd instanceof Create){
@@ -610,7 +632,6 @@ public class Server extends NetNode {
 				  versionVector.remove(serverCmd.rid.toString());
 			  }
 		  }
-		  versionVector.put(wr.replicaId.toString(), wr.acceptTime);
 		  ans = true;
 	  }else{ // Write already received, no need to update
 		  ans = false;
@@ -702,8 +723,10 @@ public class Server extends NetNode {
 			if(tempWrite.csn < Integer.MAX_VALUE){
 				continue;
 			}
-			else{
-				tempWrite.csn = this.getCSN(); // commit tentative writes
+			else{ //TODO check whether this update is correct
+				Write newWrite = new Write(tempWrite);
+				newWrite.csn = this.getCSN();
+				writeLog.commit(newWrite);
 			}
 		}
 	}
