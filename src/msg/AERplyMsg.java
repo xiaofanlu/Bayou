@@ -26,6 +26,10 @@ public class AERplyMsg extends Message {
   }
 
   public String toString() {
-    return super.toString() + "Anti_entropy_reply(" + CNS + ")";
+    String ans = super.toString() + "Anti_entropy_reply(" + CNS + ")";
+    for(String s : versionVector.keySet()){
+    	ans = ans + "\n" + "(" + s + ", "+versionVector.get(s) + ")"; 
+    }
+    return ans;
   }
 }

@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Provide communication abstraction for client/servers
@@ -29,7 +30,10 @@ public class NetNode extends Thread {
 
   Config config;
   NetController nc;
-
+  
+  //YW: Message buffer to hold message when system is paused
+  //hold message when paused, send all messages when unpaused and clears buffer
+  List<Message> msgBuffer = new ArrayList<Message>();
 
   public NetNode(int id) {
     pid = id;
@@ -47,8 +51,14 @@ public class NetNode extends Thread {
   /**
    * can't use start() as it is reserved for Thread start()
    */
-  public void noPause() {
+  public void unPause() {
     pause = false;
+    if(!msgBuffer.isEmpty()){
+    	for(Message msg : msgBuffer){
+    		send(msg);
+    	}
+    }
+    msgBuffer.clear();
   }
 
   /**
@@ -57,12 +67,13 @@ public class NetNode extends Thread {
    * @param msg
    */
   public void send(Message msg) {
-    if (debug) {
-      print("Sent: " + msg.toString());
-    }
     if (pause && msg.isAEmsg()) {
+    	msgBuffer.add(msg);
       return;
     }
+    if (debug) {
+    	print("Sent: " + msg.toString());
+  	}
     nc.sendMsg(msg.dst, serialize(msg));
   }
 

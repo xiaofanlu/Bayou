@@ -3,6 +3,8 @@ package util;
 import command.ClientCmd;
 import command.Del;
 import command.Put;
+import command.Retire;
+import command.Create;
 
 import java.util.Iterator;
 import java.util.PriorityQueue;
@@ -14,6 +16,7 @@ import java.util.PriorityQueue;
  */
 public class WriteLog {
   PriorityQueue<Write> log;
+  boolean debug = Constants.debug;
 
   public WriteLog() {
     log = new PriorityQueue<Write>();
@@ -77,7 +80,18 @@ public class WriteLog {
         Del cmd = (Del) cur.command;
         System.out.print("DELETE:(");
         System.out.print(cmd.song);
-      } else {
+      } else if (cur.command instanceof Create){
+    	  Create cmd = (Create) cur.command;
+    	  if(debug){
+    		  System.out.print("Create " + cmd.rid.toString());
+    	  }
+      } else if (cur.command instanceof Retire){
+    	  Retire cmd = (Retire) cur.command;
+    	  if(debug){
+    		  System.out.print("Retire " + cmd.rid.toString());
+    	  }
+      }
+      else {
         System.out.print("UNKNOWN:(");
       }
       System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?

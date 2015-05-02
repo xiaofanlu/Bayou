@@ -37,7 +37,7 @@ public class ReplicaID implements Serializable {
    */
   public ReplicaID (int id) {
     acceptTime = 0;
-    parent = new ReplicaID();
+    parent = null;
     pid = id;
   }
 
@@ -51,7 +51,7 @@ public class ReplicaID implements Serializable {
     if (parent == null) {
       return "rid(root)";
     } else {
-      return "rid(" + acceptTime + ", " + parent + " )";
+      return "rid(" + acceptTime + ", " + parent + ")";
     }
   }
 }

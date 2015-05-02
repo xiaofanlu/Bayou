@@ -107,7 +107,7 @@ public class Master {
         	Client c = (Client)nodes[id2];
         	c.disconnectWith(id1);
         } else {
-
+        	System.out.println("Invalid Operation, disconnecting two clients");
         }
       } else if (inputLine[0].equals("restoreConnection")) {
         id1 = Integer.parseInt(inputLine[1]);
@@ -132,7 +132,7 @@ public class Master {
         	Client c = (Client)nodes[id2];
         	c.connectTo(id1);
         } else {
-
+        	System.out.println("Invalid Operation, disconnecting two clients");
         }
 
       } else if (inputLine[0].equals("pause")) {
@@ -143,9 +143,9 @@ public class Master {
     	  /*
     	   * YW
     	   */
-    	  for (NetNode node : nodes){
-    		  if(node != null){
-    			  node.pause();
+    	  for (int server : curServers){
+    		  if(nodes[server] != null){
+    			  nodes[server].pause();
     		  }
     	  }
 
@@ -154,10 +154,8 @@ public class Master {
           * Resume the system and allow any Anti-Entropy messages to
 	        * propagate through the system
 	        */
-    	  for (NetNode node : nodes){
-    		  if(node != null){
-    			  node.noPause();
-    		  }
+    	  for(int id: curServers){
+    		  nodes[id].unPause();
     	  }
 
       } else if (inputLine[0].equals("stabilize")) {

@@ -43,6 +43,7 @@ public class Server extends NetNode {
     rid = new ReplicaID(id);
     isPrimary = true;
     started = true;
+    versionVector.put(rid.toString(), 0);
     start();
   }
 
@@ -75,8 +76,8 @@ public class Server extends NetNode {
   }
 
   public int getCSN() { // YW: only called when committing a new write as primary server
-    maxCSN = csnStamp;
-    return csnStamp++;
+    maxCSN = ++csnStamp;
+    return csnStamp;
   }
 
   /**
@@ -94,6 +95,9 @@ public class Server extends NetNode {
     		  System.out.println("YW: Message received before started" + msg.toString());
     	  }
     	  continue;
+      }
+      if(debug){
+    	  print("Received"+ msg.toString());
       }
 
       /* request from client */
@@ -152,10 +156,14 @@ public class Server extends NetNode {
    * @param cReply
    */
   public void setUpServer(CreateReplyMsg cReply) {
+	  if(debug){
+		  print("Set up Server!");
+	  }
     rid = cReply.rid;
     //timeStamp = rid.acceptTime + 1;
     timeStamp = rid.acceptTime; // YW: TODO: Don't need plus 1 here, since we are always assigning the next timestamp to writes
-    versionVector.put(rid.toString(), currTimeStamp());
+    versionVector.put(rid.toString(), currTimeStamp()); // Server's own version
+    versionVector.put(rid.parent.toString(), 0); // The sender's version
     started = true;
   }
 
@@ -251,7 +259,9 @@ public class Server extends NetNode {
     //YW: Create should contain the id of new created server's ID
     //Create create = new Create(rid, acceptTime);
     Create create = new Create(newId, acceptTime);
-    Write entry = new Write(csn, acceptTime, rid, create);
+    Write entry = new Write(csn, acceptTime, this.rid, create);
+    System.out.println("Create Write" + entry.replicaId.toString());
+    
     updateVersionVector(entry);
     
     undo(entry);
@@ -265,6 +275,7 @@ public class Server extends NetNode {
     */
     
     // send ack to server
+    send(new Message(pid,msg.src));
     send(new CreateReplyMsg(pid, msg.src, newId));
     // update with neighbors, anti-entropy
     /*
@@ -336,13 +347,17 @@ public class Server extends NetNode {
   public void antiEntropyReplyHandler(AERplyMsg replyMsg){
 	  Iterator<Write> iter = writeLog.getIterator();
 	  AEMultiAckMsg aeMultiAckMsg = new AEMultiAckMsg(pid, replyMsg.src);
+	  if(debug){
+		  System.out.println(versionVector.toString());
+		  System.out.println(replyMsg.versionVector.toString());
+	  }
 	  while(iter.hasNext()){
 		  Write wr = iter.next();
 		  if(wr.csn <= replyMsg.CNS){// If the write is already committed in the receiver, ignore this write
 			  continue;
 		  }
 		  else{
-			  Integer completeVersion = completeV(replyMsg.versionVector,wr.replicaId);
+			  Integer completeVersion = completeV(replyMsg.versionVector, wr.replicaId);
 			  if (wr.acceptTime <= completeVersion){ // If the receiver has the write but doesn't know the write is committed
 				  if(wr.csn < Integer.MAX_VALUE){
 					  aeMultiAckMsg.addMsg(new AEAckMsg(pid, replyMsg.src, wr, true));
@@ -546,7 +561,7 @@ public class Server extends NetNode {
    * Issue retire write to itself
    * must be called by Master thread for blocking.
    */
-  public void toRetire() {
+  public synchronized void toRetire() {
     int acceptTime = nextTimeStamp();
     int csn = isPrimary() ? getCSN() : Integer.MAX_VALUE;
     Retire rcmd = new Retire(rid, acceptTime);
@@ -577,12 +592,14 @@ public class Server extends NetNode {
    *  stop looping
    *  unblock master thread
    */
-  public void retire(int src) {
+  public synchronized void retire(int src) {
     if (isPrimary) {
       // set up new primary with current CNS counter, globally unique
       send(new PrimaryHandOffMsg(pid, src, csnStamp));
     }
     retired =true;
+    shutdown = true;
+    nc.shutdown();
     // wake up the blocked master
     notifyAll();
   }
@@ -593,7 +610,7 @@ public class Server extends NetNode {
    */
   public Integer completeV(Map<String, Integer> vv,ReplicaID S){
 	  if(vv.containsKey(S.toString())){
-		  return vv.get(S);
+		  return vv.get(S.toString());
 	  }else if(S.parent == null){
 		  return Integer.MAX_VALUE;
 	  }else{
@@ -614,24 +631,20 @@ public class Server extends NetNode {
 	  Integer completeVersion = completeV(versionVector, writeRid); // return the complete version of the Write's RID
 	  boolean ans;
 	  
-	  if(writeRid.toString().equals(this.rid.toString())){
-		  if(versionVector.get(this.rid.toString()) < wr.acceptTime){
-			  versionVector.put(this.rid.toString(), wr.acceptTime);
-		  }
-		  return true;
-	  }
-	  
 	  if(completeVersion < wr.acceptTime){//Write not seen before, update version vector
-		  versionVector.put(wr.replicaId.toString(), wr.acceptTime); // First update the version vector for write
 		  /* Handle server commands */
 		  if(wr.command instanceof ServerCmd){ // The creation/Retire information is not received before
 			  ServerCmd serverCmd = (ServerCmd) wr.command;
+			  Integer cmdCompleteV = completeV(versionVector,serverCmd.rid);
 			  if(serverCmd instanceof Create){
-				  versionVector.put(serverCmd.rid.toString(), serverCmd.acceptTime);
+				  if(cmdCompleteV <= serverCmd.acceptTime){ // Only update the version if the server is never seen before
+					  versionVector.put(serverCmd.rid.toString(), serverCmd.acceptTime);
+				  }
 			  }else if(serverCmd instanceof Retire){
 				  versionVector.remove(serverCmd.rid.toString());
 			  }
 		  }
+		  versionVector.put(wr.replicaId.toString(), wr.acceptTime); // First update the version vector for write
 		  ans = true;
 	  }else{ // Write already received, no need to update
 		  ans = false;
@@ -667,7 +680,7 @@ public class Server extends NetNode {
 			if(cmd instanceof Retire){
 				Retire retireCmd = (Retire) cmd;
 				if (connected.contains(retireCmd.rid.pid)) {
-					connected.remove(retireCmd.rid.pid);
+					connected.remove(((Integer)retireCmd.rid.pid));
 				}
 			}
 		}
@@ -731,5 +744,12 @@ public class Server extends NetNode {
 		}
 	}
   
+	public String versionVectorToString(Map<String, Integer> vv){
+		String ans = new String();
+		for(String s : vv.keySet()){
+	    	ans = ans + "\n" + "(" + s + ", "+vv.get(s) + ")"; 
+	    }
+		return ans;
+	}
   
 }

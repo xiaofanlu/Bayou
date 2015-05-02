@@ -102,7 +102,7 @@ public class SessionManager implements Serializable {
    */
   public Integer sessionCompleteV(Map<String, Integer> vv, ReplicaID rid){
 	  if(vv.containsKey(rid.toString())){
-		  return vv.get(rid);
+		  return vv.get(rid.toString());
 	  }else if(rid.parent == null){
 		  return Integer.MAX_VALUE;
 	  }else{

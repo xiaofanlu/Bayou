@@ -12,5 +12,9 @@ public class AERqstMsg extends Message{
   public String toString() {
     return super.toString() + "Anti_Entropy_Request()";
   }
+  @Override
+  public boolean isAEmsg(){
+	  return true;
+  }
 }
 

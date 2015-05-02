@@ -26,5 +26,8 @@ public class AEAckMsg extends Message {
     return super.toString() + " Anti_entropy_ack: "
             + write.toString() + " Commit?" + commit;
   }
-
+  @Override
+  public boolean isAEmsg(){
+	  return true;
+  }
 }
