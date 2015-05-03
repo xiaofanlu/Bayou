@@ -130,6 +130,7 @@ public class Client extends NetNode {
 	  }else if(serverId == connectServerId){
 		  // Do nothing, already connected to current server
 	  }else{
+		  serverId = connectServerId;
 		  //Display error message, connecting to multiple servers
 	  }
   }
