@@ -12,6 +12,7 @@ breakConnection 0 2
 start
 put 4 a 123.edu
 stabilize
+breakConnection 0 3
 retireServer 0
 stabilize
 put 5 b 456.edu

@@ -94,8 +94,13 @@ public class WriteLog {
       else {
         System.out.print("UNKNOWN:(");
       }
-      System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?
+      if(cur.command instanceof Put || cur.command instanceof Del){
+    	  System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?
                                                   "FALSE" : "TRUE"));
+      }else if(debug){
+    	  System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?
+                  "FALSE" : "TRUE"));
+      }
     }
   }
 

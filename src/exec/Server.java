@@ -260,7 +260,9 @@ public class Server extends NetNode {
     //Create create = new Create(rid, acceptTime);
     Create create = new Create(newId, acceptTime);
     Write entry = new Write(csn, acceptTime, this.rid, create);
-    System.out.println("Create Write" + entry.replicaId.toString());
+    if(debug){
+    	System.out.println("Create Write" + entry.replicaId.toString());
+    }
     
     updateVersionVector(entry);
     
@@ -535,8 +537,10 @@ public class Server extends NetNode {
         print(connected.toString());
       }
     } else {
-      print("Disconnected with " + id + " no connection found...");
-      print(connected.toString());
+    	if(debug){
+    		print("Disconnected with " + id + " no connection found...");
+    		print(connected.toString());
+    	}
     }
   }
 
@@ -580,7 +584,7 @@ public class Server extends NetNode {
     while (!retired) {
       try {
         wait();
-      } catch (InterruptedException e) { //YW¡Gsuppress this output
+      } catch (InterruptedException e) { //YW:suppress this output
         e.printStackTrace();
       }
     }

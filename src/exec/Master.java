@@ -56,6 +56,7 @@ public class Master {
         takeSnap(Constants.SLEEP);
 
       } else if (inputLine[0].equals("retireServer")) {
+    	  takeSnap(Constants.SLEEP); //YW: wait for client messages
         serverId = Integer.parseInt(inputLine[1]);
 	      /**
 	       * Retire the server with the id specified. This should block until
