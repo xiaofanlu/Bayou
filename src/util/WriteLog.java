@@ -8,6 +8,8 @@ import command.Create;
 
 import java.util.Iterator;
 import java.util.PriorityQueue;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Log of all the Writes on a Server
@@ -15,19 +17,40 @@ import java.util.PriorityQueue;
  * 2. commmitable
  */
 public class WriteLog {
-  PriorityQueue<Write> log;
+  //PriorityQueue<Write> log;
+  List<Write> ywLog;
   boolean debug = Constants.debug;
 
   public WriteLog() {
-    log = new PriorityQueue<Write>();
+    //log = new PriorityQueue<Write>();
+	  ywLog = new ArrayList<Write>();
   }
 
   public Iterator<Write> getIterator () {
-    return new PqIter(log);
+    //return new PqIter(log);
+    return new listIter(ywLog);
   }
 
   public void add (Write entry) {
-    log.offer(entry);
+    //log.offer(entry);
+	  Iterator<Write> iter = getIterator();
+	  Write insertWrite = null; // the first write larger than entry
+	  Write wr = null;
+	  while(iter.hasNext()){
+		  wr = iter.next();
+		  if(wr.compareTo(entry) <= 0){
+			  // no larger than entry, don't insert entry
+		  }else{
+			  insertWrite = wr;
+			  break;
+		  }
+	  }
+	  if(insertWrite == null){
+		  ywLog.add(entry);
+	  }else{
+		  int location = ywLog.indexOf(insertWrite);
+		  ywLog.add(location, entry);
+	  }
   }
 
   /**
@@ -41,8 +64,10 @@ public class WriteLog {
     while (it.hasNext()) {
       Write w = it.next();
       if (w.sameAs(entry) && w.csn != entry.csn) {
-        log.remove(w);
-        log.offer(entry);
+    	  ywLog.remove(w);
+    	  add(entry);
+        //log.remove(w);
+        //log.offer(entry);
         return true;
       }
     }
@@ -136,5 +161,27 @@ public class WriteLog {
     public void remove() {
       throw new UnsupportedOperationException("");
     }
+  }
+  
+  /**
+   * Iterator over ArrayList
+   */
+  class listIter implements Iterator<Write>{
+	  final List<Write> list;
+	  public listIter(List<Write> source){
+		  list = new ArrayList<Write>(source);
+	  }
+	  @Override
+	  public boolean hasNext(){
+		  return !list.isEmpty();
+	  }
+	  @Override
+	  public Write next(){
+		  return list.remove(0);
+	  }
+	  @Override
+	  public void remove(){
+		  throw new UnsupportedOperationException("");
+	  }
   }
 }
