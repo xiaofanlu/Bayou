@@ -21,7 +21,8 @@ public class Master {
       if (Constants.debug) {
         System.out.println("Command: " + Arrays.toString(inputLine));
       }
-
+      
+      takeSnap(Constants.SLEEP);//Wait till the message is previous msg is sent
 
       if (inputLine[0].equals("joinServer")) {
         serverId = Integer.parseInt(inputLine[1]);
@@ -66,8 +67,8 @@ public class Master {
         assert nodes[serverId] instanceof Server;
         Server s = (Server)nodes[serverId];
         s.toRetire();
-        //YW:
-        curServers.remove(serverId);
+        //YW: Type cast here is used to distinguish between remove(E) and remove(int)
+        curServers.remove((Integer)serverId);
         for(int i : curServers){
         	if(nodes[i] instanceof Server){
         		Server temp_node = (Server)nodes[i];
@@ -76,7 +77,6 @@ public class Master {
         	//Clients should disconnect with server based on how retire works
         }
         //Disconnect all links between serverId and servers / clients
-
       } else if (inputLine[0].equals("joinClient")) {
         clientId = Integer.parseInt(inputLine[1]);
         serverId = Integer.parseInt(inputLine[2]);

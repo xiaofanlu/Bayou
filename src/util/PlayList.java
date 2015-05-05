@@ -37,7 +37,7 @@ public class PlayList {
     if (pl.containsKey(song)) {
       return pl.get(song);
     } else {
-      return "NOT_FOUND";
+      return "ERR_KEY";
     }
   }
 

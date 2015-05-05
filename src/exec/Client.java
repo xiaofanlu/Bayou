@@ -42,7 +42,9 @@ public class Client extends NetNode {
             sm.updateWrite(rqstRply.write);
           } else {
             // todo
-            System.out.print("Put failed, to be updated");
+        	  if(debug){
+        		  System.out.print("Put failed, to be updated");
+        	  }
           }
         }
         if (rqstRply.cmd instanceof Del) {
@@ -50,12 +52,14 @@ public class Client extends NetNode {
             sm.updateWrite(rqstRply.write);
           } else {
             // todo
-            System.out.print("Del failed, to be updated");
+        	  if(debug){
+        		  System.out.print("Del failed, to be updated");
+        	  }
           }
         }
         if (rqstRply.cmd instanceof Get) {
           if (rqstRply.suc) {
-        	  if(!rqstRply.url.equals("NOT_FOUND")){
+        	  if(!rqstRply.url.equals("ERR_KEY")){ //YW: TODO check the logic of this sentence
                   sm.updateRead(rqstRply.write);        		  
         	  }
             System.out.println(rqstRply.cmd.song + ":" + rqstRply.url);
@@ -102,7 +106,9 @@ public class Client extends NetNode {
    */
   public void get (String name) {
 	  if(serverId<0){
-		  System.out.println("Disconnected!");
+		  if(debug){
+			  System.out.println("Disconnected!");
+		  }
 		  return;
 	  }
     ClientCmd cmd = new Get(name);

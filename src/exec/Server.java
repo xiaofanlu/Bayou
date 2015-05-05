@@ -605,6 +605,7 @@ public class Server extends NetNode {
     shutdown = true;
     nc.shutdown();
     // wake up the blocked master
+    //YW: wait a few moment till the handoffmsg is received and handled
     notifyAll();
   }
   
