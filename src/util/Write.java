@@ -31,14 +31,22 @@ public class Write implements Comparable<Write>, Serializable {
 
   @Override
   public int compareTo(Write other) {
-    if (this.csn != other.csn) {
+	  /* YW: revised comparison */
+    /*if (this.csn != other.csn) {
       return this.csn - other.csn;
     } else if (this.acceptTime != other.acceptTime) {
       return this.acceptTime - other.acceptTime;
     } else {
       // todo
       return 0;
-    }
+    }*/
+	  if(this.csn != other.csn){
+		  return this.csn - other.csn;
+	  }else if(this.replicaId.toString().equals(other.replicaId.toString())){ // Two writes comes from the same replica
+		  return this.acceptTime - other.acceptTime;
+	  }else{
+		  return this.replicaId.toString().compareTo(other.replicaId.toString());
+	  }
   }
 
 
