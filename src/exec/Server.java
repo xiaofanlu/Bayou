@@ -9,8 +9,8 @@ import util.WriteLog;
 import util.UndoLog;
 
 import java.util.*;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+//import java.util.concurrent.locks.Lock;
+//import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Server/Replica class
@@ -33,7 +33,7 @@ public class Server extends NetNode {
   boolean toRetire = false;
   boolean retired = false;
   boolean started = false; // YW: boolean of whether the server has registered at other server, has a Replica id and accept-stamp
-  public Lock retireLock = new ReentrantLock();
+  //public Lock retireLock = new ReentrantLock();
   /**
    * Primary server, start with id = 0 //YW not with id 0
    * @param id
@@ -128,10 +128,10 @@ public class Server extends NetNode {
           retire(msg.src);
         }
       } 
-      else if (msg instanceof AEAckMsg) {
+      /*else if (msg instanceof AEAckMsg) {
         AEAckMsg ackMsg = (AEAckMsg) msg;
         antiEntropyACKHandler(ackMsg);
-      }
+      }*/
       // Handling AEMultiAckMsg
       else if(msg instanceof AEMultiAckMsg){
     	  AEMultiAckMsg multiAckMsg = (AEMultiAckMsg)msg;
@@ -143,6 +143,7 @@ public class Server extends NetNode {
         PrimaryHandOffMsg pho = (PrimaryHandOffMsg) msg;
         isPrimary = true;
         csnStamp = pho.curCSN;
+        maxCSN = csnStamp;
         //YW: commit all tentative writes
         startPrimary();
         doGossip();
@@ -160,7 +161,7 @@ public class Server extends NetNode {
 		  print("Set up Server!");
 	  }
     rid = cReply.rid;
-    timeStamp = rid.acceptTime; // YW: TODO: Don't need plus 1 here, since we are always assigning the next timestamp to writes
+    timeStamp = rid.acceptTime; // YW: Don't need plus 1 here, since we are always assigning the next timestamp to writes
     versionVector.put(rid.toString(), currTimeStamp()); // Server's own version
     versionVector.put(rid.parent.toString(), 0); // The sender's version
     started = true;
@@ -272,7 +273,7 @@ public class Server extends NetNode {
     /*
     versionVector.put(rid.toString(), currTimeStamp());
     //versionVector.put(newId.toString(), 0);//YW: what about creating version with acceptTime ?
-    versionVector.put(newId.toString(), acceptTime); // TODO: Check whether this is necessary
+    versionVector.put(newId.toString(), acceptTime); // Check whether this is necessary
     */
     
     // send ack to server
@@ -286,59 +287,6 @@ public class Server extends NetNode {
      */
 	doGossip(msg.src);// Gossip with new server
     doGossip();
-  }
-
-
-  /**
-   * Propagating committed writes upon receiving reply from R
-   * Complex logic, can be buggy
-   */
-  public void anti_entropy(AERplyMsg msg) {
-    Iterator<Write> it = writeLog.getIterator();
-    while (it.hasNext()) {
-      Write w = it.next();
-      String rjID = w.replicaId.toString();         // R_j, owner of the write
-      String rkID = w.replicaId.parent.toString();  // R_k
-      if (w.csn <= msg.CNS) {
-        /* already committed in R */
-        continue;
-      }  else if (w.csn < Integer.MAX_VALUE) {   // > msg.CNS
-        /*  committed write unknown to R */
-        if (msg.hasKey(rjID)) {
-          if ( w.acceptTime <= msg.getTime(rjID)) {
-            /* R has the write, but doesn't know it is committed  */
-            send(new AEAckMsg(pid, msg.src, w, true));
-          } else {
-            /* R don't have the write, add committed write  */
-            send(new AEAckMsg(pid, msg.src, w));
-          }
-        }
-        /* YW: this else condition is not necessary, sender just send 
-        all the writes to receiver and let receiver decide*/
-        else { 
-          /*  the Missing VV entry, don't know of rjID ...  */
-          int riVrk = msg.hasKey(rkID) ? msg.getTime(rkID) : -1;
-          int TSkj = w.replicaId.acceptTime;
-          if (riVrk < TSkj) {
-            send(new AEAckMsg(pid, msg.src, w));
-          }
-        }
-      } else {
-        /* all tentative writes */
-        if (msg.hasKey(rjID)) {
-          if (msg.getTime(rjID) < w.acceptTime) {
-            send(new AEAckMsg(pid, msg.src, w));
-          }
-        } else {
-          /*  the Missing VV entry, don't know of rjID ...  */
-          int riVrk = msg.hasKey(rkID) ? msg.getTime(rkID) : -1;
-          int TSkj = w.replicaId.acceptTime;
-          if (riVrk < TSkj) {
-            send(new AEAckMsg(pid, msg.src, w));
-          }
-        }
-      }
-    }
   }
   
   /**
@@ -373,43 +321,6 @@ public class Server extends NetNode {
 	  send(aeMultiAckMsg);
   }
 
-  /**
-   * handler for write updates through anti-entropy process
-   * @param ackMsg
-   */
-  public void antiEntropyACKHandler(AEAckMsg ackMsg) {
-    if (ackMsg.commit) {
-      /* I have the write, just need to commit it
-       * rollback may be needed ...
-       */
-      if (writeLog.commit(ackMsg.write)) {
-        /* successfully updated */
-        maxCSN = Math.max(maxCSN, ackMsg.write.csn);
-        refreshPlayList();
-        doGossip();
-      }
-    } else {
-      boolean newCommitted = false;
-      Write w = ackMsg.write;
-      if (isPrimary() && ackMsg.write.csn == Integer.MAX_VALUE) {
-        w.csn = getCSN();
-        newCommitted = true;
-      }
-      writeLog.add(w);
-      refreshPlayList();
-      versionVector.put(rid.toString(), currTimeStamp());
-      // update maxCSN;
-      if (!isPrimary() && w.csn != Integer.MAX_VALUE) {
-        maxCSN = Math.max(maxCSN, w.csn);
-      }
-
-      if (newCommitted) {
-        doGossip();
-      } else {
-        doGossip(ackMsg.src);
-      }
-    }
-  }
   
   /**
    * YW: handler for packed multiple ACKs
@@ -476,47 +387,6 @@ public class Server extends NetNode {
   }
 
 
-  /**
-   * Refresh playlist on every new committed write,
-   * as there might be some potential roll back.
-   */
-  public void refreshPlayList() {
-    Hashtable<String, String> tmp = new Hashtable<String, String> ();
-    Iterator<Write> it = writeLog.getIterator();
-    while (it.hasNext()) {
-      Command cmd = it.next().command;
-      if (cmd instanceof ClientCmd) {
-        if (cmd instanceof Put) {
-          Put put = (Put) cmd;
-          tmp.put(put.song, put.url);
-        } else if (cmd instanceof Del) {
-          Del del = (Del) cmd;
-          tmp.remove(del.song);
-        } else if (cmd instanceof Get) {
-          // no change here
-        }
-      } else if (cmd instanceof ServerCmd) {
-        ServerCmd scmd = (ServerCmd) cmd;
-        if (cmd instanceof Create) {
-          String id = scmd.rid.toString();
-          if (!versionVector.containsKey(id)) {
-            versionVector.put(id, 0);
-          }
-        } else if (cmd instanceof Retire) {
-          String id = scmd.rid.toString();
-          if (versionVector.containsKey(id)) {
-            versionVector.remove(id);
-          }
-          if (connected.contains(scmd.rid.pid)) {
-            connected.remove(scmd.rid.pid);
-          }
-        }
-      }
-    }
-    playList.pl = tmp;
-  }
-
-
   public void connectTo(int id) {
    if (!connected.contains(id)) {
      connected.add(id);
@@ -548,6 +418,7 @@ public class Server extends NetNode {
     if (connected.contains(pid)) {
       connected.remove((Integer) pid);
     }
+    doGossip();
     if (debug) {
       print("New Server joined: ");
       print(connected.toString());
@@ -600,7 +471,7 @@ public class Server extends NetNode {
       // set up new primary with current CNS counter, globally unique
       send(new PrimaryHandOffMsg(pid, src, csnStamp));
     }
-    retired =true;
+    retired = true;
     shutdown = true;
     nc.shutdown();
     // wake up the blocked master
@@ -739,7 +610,7 @@ public class Server extends NetNode {
 			if(tempWrite.csn < Integer.MAX_VALUE){
 				continue;
 			}
-			else{ //TODO check whether this update is correct
+			else{
 				Write newWrite = new Write(tempWrite);
 				newWrite.csn = this.getCSN();
 				writeLog.commit(newWrite);

@@ -1,1 +1,1 @@
-java -cp bin/Bayou.jar:lib/commons-codec-1.9.jar exec.Master
+java -jar Bayou.jar
