@@ -160,7 +160,6 @@ public class Server extends NetNode {
 		  print("Set up Server!");
 	  }
     rid = cReply.rid;
-    //timeStamp = rid.acceptTime + 1;
     timeStamp = rid.acceptTime; // YW: TODO: Don't need plus 1 here, since we are always assigning the next timestamp to writes
     versionVector.put(rid.toString(), currTimeStamp()); // Server's own version
     versionVector.put(rid.parent.toString(), 0); // The sender's version
@@ -619,7 +618,6 @@ public class Server extends NetNode {
 	  }else if(S.parent == null){
 		  return Integer.MAX_VALUE;
 	  }else{
-		  ReplicaID parent_rid = S.parent;
 		  if(completeV(vv, S.parent) >= S.acceptTime){
 			  return Integer.MAX_VALUE;
 		  }else{

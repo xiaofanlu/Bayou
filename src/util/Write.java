@@ -58,7 +58,11 @@ public class Write implements Comparable<Write>, Serializable {
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("W(");
-    sb.append(csn);
+    if(csn == Integer.MAX_VALUE){
+    	sb.append("INF");
+    }else{
+    	sb.append(csn);
+    }
     sb.append(", ");
     sb.append(acceptTime);
     sb.append(", ");

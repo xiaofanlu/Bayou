@@ -62,7 +62,7 @@ public class SessionManager implements Serializable {
    * @param subV : sub vector
    * @return
    */
-  public boolean dominates(Map<String, Integer> supV,
+  /*public boolean dominates(Map<String, Integer> supV,
                            Map<String, Integer> subV ) {
     for (String rid : subV.keySet()) {
       if (!supV.containsKey(rid)) {
@@ -77,6 +77,7 @@ public class SessionManager implements Serializable {
     }
     return true;
   }
+  */
   
   /**
    * YW: completeDominates
@@ -106,7 +107,6 @@ public class SessionManager implements Serializable {
 	  }else if(rid.parent == null){
 		  return Integer.MAX_VALUE;
 	  }else{
-		  ReplicaID parent_rid = rid.parent;
 		  if(sessionCompleteV(vv, rid.parent) >= rid.acceptTime){
 			  return Integer.MAX_VALUE;
 		  }else{

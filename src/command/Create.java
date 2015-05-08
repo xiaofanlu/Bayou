@@ -3,7 +3,8 @@ package command;
 import util.ReplicaID;
 
 /**
- * Created by xiaofan on 4/13/15.
+ * Created by xiaofan on 4/13/15. This command is sent from a existing replica to the new created 
+ * replica. rid here is the rid of the new replica. 
  */
 
 public class Create extends ServerCmd {

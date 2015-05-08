@@ -11,7 +11,7 @@ public class Master {
   public static void main(String [] args) {
     NetNode[] nodes = new NetNode[Constants.MAX_NODE];
     ArrayList<Integer> curServers = new ArrayList<Integer>();
-
+    boolean debug = Constants.debug;
 
     Scanner scan = new Scanner(System.in);
     while (scan.hasNextLine()) {
@@ -22,7 +22,7 @@ public class Master {
         System.out.println("Command: " + Arrays.toString(inputLine));
       }
       
-      takeSnap(Constants.SLEEP);//Wait till the message is previous msg is sent
+      takeSnap(100);//Wait till the message is previous msg is sent
 
       if (inputLine[0].equals("joinServer")) {
         serverId = Integer.parseInt(inputLine[1]);
@@ -39,7 +39,7 @@ public class Master {
         //YW: the new server should connect to all existing servers
         //but old servers should not connect with each other
         Server s = (Server) nodes[serverId];
-        s.updateConnected(curServers);
+        s.updateConnected(curServers); // New server connect to all existing servers
         for(int i : curServers){
         	assert nodes[i] != null;
         	assert nodes[i] instanceof Server;
@@ -108,7 +108,9 @@ public class Master {
         	Client c = (Client)nodes[id2];
         	c.disconnectWith(id1);
         } else {
-        	System.out.println("Invalid Operation, disconnecting two clients");
+        	if(debug){
+        		System.out.println("Invalid Operation, disconnecting two clients");
+        	}
         }
       } else if (inputLine[0].equals("restoreConnection")) {
         id1 = Integer.parseInt(inputLine[1]);
@@ -133,7 +135,9 @@ public class Master {
         	Client c = (Client)nodes[id2];
         	c.connectTo(id1);
         } else {
-        	System.out.println("Invalid Operation, disconnecting two clients");
+        	if(debug){
+        		System.out.println("Invalid Operation, disconnecting two clients");
+        	}
         }
 
       } else if (inputLine[0].equals("pause")) {
@@ -222,7 +226,8 @@ public class Master {
       }
     }
     // all done
-    takeSnap(500);
+    takeSnap(Constants.SLEEP);
+    scan.close();
     System.exit(0);
   }
 

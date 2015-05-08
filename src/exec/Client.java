@@ -78,7 +78,9 @@ public class Client extends NetNode {
    */
   public void put (String name, String url) {
 	  if(serverId<0){
-		  System.out.println("Disconnected!");
+		  if(debug){
+			  System.out.println("Disconnected!");
+		  }
 		  return;
 	  }
     ClientCmd cmd = new Put(name, url);
@@ -92,7 +94,9 @@ public class Client extends NetNode {
    */
   public void del (String name) {
 	  if(serverId<0){
-		  System.out.println("Disconnected!");
+		  if(debug){
+			  System.out.println("Disconnected!");
+		  }
 		  return;
 	  }
     ClientCmd cmd = new Del(name);

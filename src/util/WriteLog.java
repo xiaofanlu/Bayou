@@ -7,7 +7,7 @@ import command.Retire;
 import command.Create;
 
 import java.util.Iterator;
-import java.util.PriorityQueue;
+//import java.util.PriorityQueue;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -117,7 +117,9 @@ public class WriteLog {
     	  }
       }
       else {
-        System.out.print("UNKNOWN:(");
+    	  if(debug){
+    		  System.out.print("UNKNOWN:(");
+    	  }
       }
       if(cur.command instanceof Put || cur.command instanceof Del){
     	  System.out.println("):" + (cur.csn == Integer.MAX_VALUE ?
@@ -141,7 +143,7 @@ public class WriteLog {
   /**
    * Build iterator on a new copy of queue
    */
-  class PqIter implements Iterator<Write> {
+  /*class PqIter implements Iterator<Write> {
     final PriorityQueue<Write> pq;
     public PqIter(PriorityQueue <Write> source) {
       pq = new PriorityQueue(source);
@@ -161,7 +163,7 @@ public class WriteLog {
     public void remove() {
       throw new UnsupportedOperationException("");
     }
-  }
+  }*/
   
   /**
    * Iterator over ArrayList

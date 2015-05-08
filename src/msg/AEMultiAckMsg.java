@@ -33,12 +33,12 @@ public class AEMultiAckMsg extends Message {
 	}
 	
 	public String toString(){
-		String ans = new String();
-		ans = ans + super.toString() + "Multiple_Anti_entrophy_ack\n";
+		StringBuilder sb = new StringBuilder();
+		sb.append(super.toString() + "Multiple_Anti_entrophy_ack\n");
 		List<Message> temp = new ArrayList<Message>(msgList);
 		for(Message msg : temp){
-			ans = ans+ msg.toString() + "\n";
+			sb.append(msg.toString() + "\n");
 		}
-		return ans;
+		return sb.toString();
 	}
 }

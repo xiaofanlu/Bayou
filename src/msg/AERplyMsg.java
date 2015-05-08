@@ -32,4 +32,8 @@ public class AERplyMsg extends Message {
     }
     return ans;
   }
+  @Override
+  public boolean isAEmsg(){
+	  return true;
+  }
 }
